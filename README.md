@@ -1,13 +1,17 @@
-# Kurumsal AI Asistan Platformu
+# Enterprise AI Assistant
 
-> **Enterprise AI Assistant Platform** — kurumsal dokümanlardan (PDF / DOCX) RAG ile soru cevaplama yapan, çok kiracılı (multi-tenant) bir SaaS iskeleti. Polyglot monorepo: **C# · Java · Rust · Python · TypeScript** — beş dil ekosistemini ve dört mikroservis iletişim desenini tek projede gösterir.
+> **Enterprise AI Assistant Platform** — kurumsal dokümanlardan (PDF / DOCX) RAG ile soru cevaplama yapan, çok kiracılı (multi-tenant) bir SaaS. Polyglot monorepo: **C# · Java · Rust · Python · TypeScript** — beş dil ekosistemini ve dört mikroservis iletişim desenini tek projede gösterir.
 
+[![Phase](https://img.shields.io/badge/Phase-A%20Skeleton%20%E2%9C%85-success)](./ROADMAP.md)
+[![Next](https://img.shields.io/badge/Next-B%20Code--gen%20%26%20DB%20foundation-blue)](./ROADMAP.md#phase-b--code-gen--db-foundation-)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)
 ![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk)
 ![Rust](https://img.shields.io/badge/Rust-stable-orange?logo=rust)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
+
+> **🚧 Bu repo açık geliştirme aşamasında.** Phase A (iskelet) tamamlandı; bir sonraki faz için yol haritası: [ROADMAP.md](./ROADMAP.md). Servisler şu an minimum çalışır iskelet; business logic faz-faz dolduruluyor.
 
 ## Bu nedir?
 
@@ -109,6 +113,7 @@ make health
 
 | Doküman | İçerik |
 |---|---|
+| [ROADMAP.md](./ROADMAP.md) | Faz-faz yol haritası ve mevcut durum |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Derin teknik karar dokümanı |
 | [docs/architecture/](./docs/architecture/) | ADR'ler (Architecture Decision Records) |
 | [docs/claw-learnings/](./docs/claw-learnings/) | Claude Code internals analizinden çıkarılan referans notları |
