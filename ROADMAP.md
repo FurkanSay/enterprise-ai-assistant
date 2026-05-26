@@ -29,17 +29,18 @@
 - ✅ 8 GitHub Actions CI workflow
 - ✅ MIT LICENSE, README, ARCHITECTURE, .env.example
 
-## Phase B — Code-gen + DB foundation ⏳
+## Phase B — Code-gen + DB foundation 🚧
 
 > Servis stub'ları ve DB başlangıç verisi.
 
-- [ ] `buf generate` → libs/generated/{dotnet,java,rust,python,typescript}
-- [ ] Postgres migration scripts (Flyway for Java, EF Core for .NET, alembic for Python)
+- [x] **B1** `buf generate` → libs/generated/{dotnet,java,rust,python} (TypeScript Phase H'de)
+- [ ] **B2** Servislere stub bağla (csproj, pom, Cargo.toml, pyproject.toml)
+- [ ] **B3** Postgres migration scripts (Flyway for Java, EF Core for .NET, alembic for Python)
   - identity_schema.{tenants done, users, roles, refresh_tokens}
   - documents_schema.documents
   - aiengine_schema.{sessions, messages, tool_invocations}
-- [ ] Her tabloya RLS policy uygula (ADR-002 template'i)
-- [ ] `make up` ile tüm stack ayağa kalksın, `/health/ready` hepsi 200 dönsün
+- [ ] **B4** Her tabloya RLS policy uygula (ADR-002 template'i)
+- [ ] **B5** `make up` ile tüm stack ayağa kalksın, `/health/ready` hepsi 200 dönsün
 
 ## Phase C — AI Engine end-to-end smoke ⏳
 
