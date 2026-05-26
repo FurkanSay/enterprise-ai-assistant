@@ -1,0 +1,34 @@
+name: gateway-ci
+
+on:
+  pull_request:
+    paths:
+      - 'services/gateway/**'
+      - '.github/workflows/gateway-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/gateway/**'
+
+defaults:
+  run:
+    working-directory: services/gateway
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore src/Gateway.Api/Gateway.Api.csproj
+
+      - name: Build
+        run: dotnet build src/Gateway.Api/Gateway.Api.csproj --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release --logger "trx;LogFileName=test-results.trx"

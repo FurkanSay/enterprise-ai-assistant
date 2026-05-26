@@ -1,0 +1,262 @@
+# Tek `docker compose up -d` ile tüm stack ayağa kalkar.
+# Dev override için: docker-compose.override.yml (otomatik merge).
+
+name: kurumsal-ai-asistan
+
+services:
+  # ─────────────────────────────────────────────────────────────────
+  # INFRASTRUCTURE
+  # ─────────────────────────────────────────────────────────────────
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: kai-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kai_dev_pwd}
+      POSTGRES_DB: ${POSTGRES_DB:-kai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: kai-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: kai-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-kai_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-kai_minio_pwd}
+    ports:
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # Console UI
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: kai-qdrant
+    ports:
+      - "6333:6333"  # REST + gRPC
+      - "6334:6334"  # gRPC only
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────────
+  # OBSERVABILITY
+  # ─────────────────────────────────────────────────────────────────
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: kai-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14250:14250"  # model.proto (used by OTel)
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: kai-otel
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./infra/otel-collector/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "8888:8888"   # collector metrics
+      - "8889:8889"   # exporter metrics
+    depends_on:
+      - jaeger
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: kai-prometheus
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: kai-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+
+  # ─────────────────────────────────────────────────────────────────
+  # APPLICATION SERVICES
+  # ─────────────────────────────────────────────────────────────────
+
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    container_name: kai-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      identity:
+        condition: service_started
+      documents:
+        condition: service_started
+      aiengine:
+        condition: service_started
+
+  identity:
+    build:
+      context: ./services/identity
+      dockerfile: Dockerfile
+    container_name: kai-identity
+    ports:
+      - "8081:8081"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-kai};Username=${POSTGRES_USER:-kai};Password=${POSTGRES_PASSWORD:-kai_dev_pwd};Search Path=identity_schema
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  documents:
+    build:
+      context: ./services/documents
+      dockerfile: Dockerfile
+    container_name: kai-documents
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kai}?currentSchema=documents_schema
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kai}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-kai_dev_pwd}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-kai_admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-kai_minio_pwd}
+      REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  processing:
+    build:
+      context: ./services/processing
+      dockerfile: Dockerfile
+    container_name: kai-processing
+    ports:
+      - "8083:8083"
+    environment:
+      REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  aiengine:
+    build:
+      context: ./services/aiengine
+      dockerfile: Dockerfile
+    container_name: kai-aiengine
+    ports:
+      - "8084:8084"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kai}:${POSTGRES_PASSWORD:-kai_dev_pwd}@postgres:5432/${POSTGRES_DB:-kai}
+      DATABASE_SCHEMA: aiengine_schema
+      REDIS_URL: redis://redis:6379
+      QDRANT_URL: http://qdrant:6333
+      PROCESSING_GRPC_URL: processing:8083
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      processing:
+        condition: service_started
+
+  realtime:
+    build:
+      context: ./services/realtime
+      dockerfile: Dockerfile
+    container_name: kai-realtime
+    ports:
+      - "8085:8085"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kai-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_WS_URL: ws://localhost:8085
+    depends_on:
+      - gateway
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  qdrant_data:
+  grafana_data:
+
+networks:
+  default:
+    name: kai-network

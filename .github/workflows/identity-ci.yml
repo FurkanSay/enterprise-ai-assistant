@@ -1,0 +1,34 @@
+name: identity-ci
+
+on:
+  pull_request:
+    paths:
+      - 'services/identity/**'
+      - '.github/workflows/identity-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/identity/**'
+
+defaults:
+  run:
+    working-directory: services/identity
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Identity.sln
+
+      - name: Build
+        run: dotnet build Identity.sln --no-restore -c Release
+
+      - name: Test
+        run: dotnet test Identity.sln --no-build -c Release

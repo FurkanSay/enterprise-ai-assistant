@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package common.v1;
+
+// TenantContext is passed as a header on every internal gRPC call.
+// Services use it to set Postgres `app.current_tenant_id` session var,
+// scope Qdrant payload filters, and tag MinIO object paths.
+//
+// Authority: this context is set by Gateway after JWT validation.
+// Downstream services MUST treat it as authoritative — do not re-derive.
+message TenantContext {
+  // Tenant UUID (matches identity_schema.tenants.id)
+  string tenant_id = 1;
+
+  // User UUID (matches identity_schema.users.id)
+  // Required for audit logging. May be empty for system-triggered ops.
+  string user_id = 2;
+
+  // Comma-separated role names, expanded at Gateway from JWT claims.
+  // Example: "admin,document_writer"
+  repeated string roles = 3;
+
+  // W3C trace context (forwarded via OTel propagator)
+  string trace_id = 4;
+
+  // Request-level correlation ID; survives across services in one user request.
+  string correlation_id = 5;
+
+  // Caller service identity (e.g. "gateway", "aiengine")
+  string caller_service = 6;
+}

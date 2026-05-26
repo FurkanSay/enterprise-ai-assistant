@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/processing-server",
+    "crates/chunker",
+    "crates/bm25-index",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Kurumsal AI Asistan"]
+license = "MIT"
+
+[workspace.dependencies]
+# ── Async runtime ───────────────────────────────────────────────────────
+tokio = { version = "1.41", features = ["full"] }
+
+# ── Web / gRPC ──────────────────────────────────────────────────────────
+axum = "0.7"
+tonic = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+http = "1.1"
+
+# ── Errors / logging / telemetry ────────────────────────────────────────
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-opentelemetry = "0.27"
+opentelemetry = { version = "0.26", features = ["trace"] }
+opentelemetry_sdk = { version = "0.26", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.26", features = ["grpc-tonic"] }
+
+# ── Serde / IO ──────────────────────────────────────────────────────────
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# ── Domain libs ─────────────────────────────────────────────────────────
+tantivy = "0.22"
+rayon = "1.10"
+unicode-segmentation = "1.12"
+uuid = { version = "1.11", features = ["v4", "serde"] }
+redis = { version = "0.27", features = ["tokio-comp", "streams"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

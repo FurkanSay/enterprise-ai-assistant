@@ -1,0 +1,38 @@
+name: processing-ci
+
+on:
+  pull_request:
+    paths:
+      - 'services/processing/**'
+      - '.github/workflows/processing-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/processing/**'
+
+defaults:
+  run:
+    working-directory: services/processing
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/processing -> target
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test --workspace --all-features

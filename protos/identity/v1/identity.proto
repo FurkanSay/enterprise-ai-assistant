@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package identity.v1;
+
+import "common/v1/tenant.proto";
+
+// IdentityService — internal gRPC API for the Identity microservice.
+// Gateway calls these during JWT validation and authorization.
+// End-user auth flows (login, refresh) are REST/OIDC (not here).
+service IdentityService {
+  // Validate JWT and resolve to a TenantContext.
+  // Gateway calls this on every protected request.
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // Look up user by ID. Used for audit log enrichment.
+  rpc GetUser(GetUserRequest) returns (User);
+
+  // Look up tenant by ID. Used for tenant quota / config lookups.
+  rpc GetTenant(GetTenantRequest) returns (Tenant);
+}
+
+// ─── Token validation ────────────────────────────────────────────────────
+
+message ValidateTokenRequest {
+  string jwt = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  // Populated only when valid=true.
+  // Gateway forwards this as tenant_context in downstream calls.
+  common.v1.TenantContext tenant_context = 2;
+  // Populated when invalid (expired, wrong issuer, etc.)
+  string error_code = 3;
+}
+
+// ─── User / Tenant lookups ───────────────────────────────────────────────
+
+message User {
+  string id = 1;
+  string tenant_id = 2;
+  string email = 3;
+  string display_name = 4;
+  repeated string roles = 5;
+  bool is_active = 6;
+  string created_at = 7;
+}
+
+message GetUserRequest {
+  common.v1.TenantContext tenant_context = 1;
+  string user_id = 2;
+}
+
+message Tenant {
+  string id = 1;
+  string name = 2;
+  string plan = 3;            // free | pro | enterprise
+  TenantQuotas quotas = 4;
+  bool is_active = 5;
+  string created_at = 6;
+}
+
+message TenantQuotas {
+  int32 max_documents = 1;
+  int64 max_tokens_monthly = 2;
+  int32 max_iterations_per_session = 3;
+  int64 max_storage_bytes = 4;
+}
+
+message GetTenantRequest {
+  common.v1.TenantContext tenant_context = 1;
+  string tenant_id = 2;
+}

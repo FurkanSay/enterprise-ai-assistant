@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: documents
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/kai?currentSchema=documents_schema}
+    username: ${SPRING_DATASOURCE_USERNAME:kai}
+    password: ${SPRING_DATASOURCE_PASSWORD:kai_dev_pwd}
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: validate     # Flyway owns migrations
+    properties:
+      hibernate:
+        default_schema: documents_schema
+        jdbc.lob.non_contextual_creation: true
+    open-in-view: false
+  flyway:
+    enabled: true
+    default-schema: documents_schema
+    schemas: documents_schema
+    create-schemas: true
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379}
+
+server:
+  port: 8082
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:kai_admin}
+  secret-key: ${MINIO_SECRET_KEY:kai_minio_pwd}
+  bucket:
+    documents: ${MINIO_BUCKET_DOCUMENTS:documents}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: grpc
+  service:
+    name: documents
+  resource:
+    attributes:
+      service.namespace: kai
+
+logging:
+  pattern:
+    console: '%d{ISO8601} %-5level [%X{trace_id:-},%X{span_id:-}] %logger{36} - %msg%n'
+  level:
+    root: INFO
+    com.aiasistan: DEBUG

@@ -1,0 +1,39 @@
+name: realtime-ci
+
+on:
+  pull_request:
+    paths:
+      - 'services/realtime/**'
+      - '.github/workflows/realtime-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/realtime/**'
+
+defaults:
+  run:
+    working-directory: services/realtime
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/realtime/package.json
+
+      - name: Install
+        run: npm install
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Type-check + build
+        run: npm run build
+
+      - name: Test
+        run: npm test -- --passWithNoTests

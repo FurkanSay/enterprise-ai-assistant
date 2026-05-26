@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_VERSION_SUFFIX     # we allow common/v1 (already versioned)
+breaking:
+  use:
+    - FILE
+deps: []

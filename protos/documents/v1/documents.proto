@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package documents.v1;
+
+import "common/v1/tenant.proto";
+import "common/v1/pagination.proto";
+import "google/protobuf/timestamp.proto";
+
+// DocumentsService — internal gRPC API for the Documents microservice.
+// Frontend uses REST via Gateway; this is for service-to-service calls.
+service DocumentsService {
+  // Fetch document metadata by ID. Tenant-scoped (RLS enforced).
+  rpc GetDocument(GetDocumentRequest) returns (Document);
+
+  // List documents for the current tenant.
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
+
+  // Get presigned download URL for the original file (MinIO).
+  rpc GetDocumentDownloadUrl(GetDocumentRequest) returns (DownloadUrl);
+
+  // Get full extracted text of a document (used by Processing for chunking).
+  // Returns text stream for memory efficiency on large docs.
+  rpc GetDocumentText(GetDocumentRequest) returns (stream TextChunk);
+}
+
+// ─── Domain types ────────────────────────────────────────────────────────
+
+message Document {
+  string id = 1;
+  string tenant_id = 2;
+  string title = 3;
+  string original_filename = 4;
+  string mime_type = 5;
+  int64 size_bytes = 6;
+  string sha256 = 7;
+  DocumentStatus status = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  // Number of chunks produced (0 until processing completes)
+  int32 chunk_count = 11;
+  // MinIO object key — relative to bucket; do not expose to frontend directly
+  string minio_object_key = 12;
+}
+
+enum DocumentStatus {
+  DOCUMENT_STATUS_UNSPECIFIED = 0;
+  DOCUMENT_STATUS_UPLOADED = 1;       // raw file in MinIO, no parsing yet
+  DOCUMENT_STATUS_PARSING = 2;
+  DOCUMENT_STATUS_CHUNKING = 3;
+  DOCUMENT_STATUS_EMBEDDING = 4;
+  DOCUMENT_STATUS_READY = 5;          // queryable via RAG
+  DOCUMENT_STATUS_FAILED = 6;
+}
+
+message TextChunk {
+  // Position in document (0-indexed)
+  int32 sequence = 1;
+  // Raw text (UTF-8)
+  string text = 2;
+  // Optional: page number (PDF), section heading (DOCX)
+  string source_location = 3;
+}
+
+message DownloadUrl {
+  string url = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+// ─── Request / Response wrappers ─────────────────────────────────────────
+
+message GetDocumentRequest {
+  common.v1.TenantContext tenant_context = 1;
+  string document_id = 2;
+}
+
+message ListDocumentsRequest {
+  common.v1.TenantContext tenant_context = 1;
+  common.v1.PageRequest page = 2;
+  // Optional filter: only return documents with this status
+  DocumentStatus status_filter = 3;
+}
+
+message ListDocumentsResponse {
+  repeated Document documents = 1;
+  common.v1.PageResponse page = 2;
+}

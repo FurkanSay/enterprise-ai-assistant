@@ -1,0 +1,34 @@
+[package]
+name = "processing-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "gRPC + Redis consumer server: chunking + BM25 indexing"
+
+[[bin]]
+name = "processing-server"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+axum.workspace = true
+tonic.workspace = true
+prost.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+http.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-opentelemetry.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+redis.workspace = true
+uuid.workspace = true
+chunker = { path = "../chunker" }
+bm25-index = { path = "../bm25-index" }

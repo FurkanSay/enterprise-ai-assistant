@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package common.v1;
+
+// Common error shape returned by any service.
+// gRPC native status codes are used for transport (NOT_FOUND, PERMISSION_DENIED, etc.).
+// This message carries domain-specific detail in the `details` Any payload.
+message CommonError {
+  // Stable error code (NOT the gRPC status code).
+  // Format: "<domain>.<error_kind>"
+  // Examples: "documents.upload_too_large", "aiengine.tool_iteration_exceeded"
+  string code = 1;
+
+  // Human-readable message in English (UI may translate based on code).
+  string message = 2;
+
+  // Optional: trace_id for debugging across services
+  string trace_id = 3;
+
+  // Optional: ISO 8601 timestamp
+  string occurred_at = 4;
+
+  // Domain-specific details (e.g. validation field paths, quota numbers)
+  // Encoded as JSON string to avoid Any unmarshalling pain across languages.
+  string details_json = 5;
+}

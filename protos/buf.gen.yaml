@@ -1,0 +1,39 @@
+version: v2
+
+# Generated stubs are committed under ../libs/generated/
+# Re-run with: make proto
+
+plugins:
+  # ─── C# / .NET ──────────────────────────────────────────────────────────
+  - remote: buf.build/protocolbuffers/csharp:v28.2
+    out: ../libs/generated/dotnet
+  - remote: buf.build/grpc/csharp:v1.66.0
+    out: ../libs/generated/dotnet
+
+  # ─── Java ───────────────────────────────────────────────────────────────
+  - remote: buf.build/protocolbuffers/java:v28.2
+    out: ../libs/generated/java
+  - remote: buf.build/grpc/java:v1.66.0
+    out: ../libs/generated/java
+
+  # ─── Rust (prost + tonic) ───────────────────────────────────────────────
+  - remote: buf.build/community/neoeinstein-prost:v0.4.0
+    out: ../libs/generated/rust
+  - remote: buf.build/community/neoeinstein-tonic:v0.4.0
+    out: ../libs/generated/rust
+
+  # ─── Python ─────────────────────────────────────────────────────────────
+  - remote: buf.build/protocolbuffers/python:v28.2
+    out: ../libs/generated/python
+  - remote: buf.build/grpc/python:v1.66.0
+    out: ../libs/generated/python
+
+  # ─── TypeScript (Connect-ES) ────────────────────────────────────────────
+  - remote: buf.build/community/bufbuild-es:v2.2.0
+    out: ../libs/generated/typescript
+    opt:
+      - target=ts
+  - remote: buf.build/community/connectrpc-es:v1.6.0
+    out: ../libs/generated/typescript
+    opt:
+      - target=ts

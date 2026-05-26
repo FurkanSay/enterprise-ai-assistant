@@ -1,0 +1,45 @@
+name: aiengine-ci
+
+on:
+  pull_request:
+    paths:
+      - 'services/aiengine/**'
+      - '.github/workflows/aiengine-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/aiengine/**'
+
+defaults:
+  run:
+    working-directory: services/aiengine
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/aiengine/uv.lock
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: uv sync --frozen || uv sync
+
+      - name: ruff lint
+        run: uv run ruff check src/ tests/
+
+      - name: ruff format check
+        run: uv run ruff format --check src/ tests/
+
+      - name: mypy
+        run: uv run mypy src/
+
+      - name: pytest
+        run: uv run pytest --cov=aiengine --cov-report=xml

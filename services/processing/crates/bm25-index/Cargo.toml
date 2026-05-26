@@ -1,0 +1,15 @@
+[package]
+name = "bm25-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Tantivy-backed BM25 inverted index — tenant-scoped"
+
+[dependencies]
+tantivy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chunker = { path = "../chunker" }

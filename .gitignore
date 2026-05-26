@@ -1,0 +1,94 @@
+# ─── Secrets ──────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*-credentials.json
+secrets/
+
+# ─── OS & Editor ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json.example
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# ─── .NET ─────────────────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.nupkg
+.vs/
+
+# ─── Java / Maven / Gradle ────────────────────────────────────────────────
+target/
+build/
+.gradle/
+.mvn/
+mvnw
+mvnw.cmd
+*.class
+
+# ─── Rust ─────────────────────────────────────────────────────────────────
+Cargo.lock         # libraries DON'T commit; binaries DO (we have both)
+!services/processing/Cargo.lock
+target/
+
+# ─── Python ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+htmlcov/
+.coverage
+.uv-cache/
+
+# ─── Node / TypeScript ────────────────────────────────────────────────────
+node_modules/
+.next/
+.nuxt/
+.svelte-kit/
+out/
+.turbo/
+.npm/
+.pnpm-store/
+
+# ─── Logs & runtime ───────────────────────────────────────────────────────
+*.log
+logs/
+*.pid
+.cache/
+
+# ─── Buf (proto code-gen output) ──────────────────────────────────────────
+# Generated stubs are committed under libs/generated/, so DON'T ignore.
+# But ignore intermediate buf artifacts:
+buf.lock
+
+# ─── Docker ───────────────────────────────────────────────────────────────
+.docker/
+
+# ─── Local data ───────────────────────────────────────────────────────────
+data/
+*.sqlite
+*.db
+
+# ─── Claude Code internal ─────────────────────────────────────────────────
+.claude/
+
+# ─── IDE-specific ─────────────────────────────────────────────────────────
+.fleet/
+*.code-workspace

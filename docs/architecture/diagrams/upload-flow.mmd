@@ -1,0 +1,65 @@
+%% RAG ingestion + Q&A end-to-end flow
+%% Render: https://mermaid.live/
+sequenceDiagram
+    autonumber
+    actor User as 👤 User
+    participant FE as 🌐 Frontend
+    participant GW as 🟦 Gateway
+    participant DOC as ☕ Documents
+    participant MINIO as 📦 MinIO
+    participant REDIS as 🔴 Redis Streams
+    participant PROC as 🦀 Processing
+    participant AI as 🐍 AI Engine
+    participant QD as 🧭 Qdrant
+    participant LLM as 🤖 LLM
+    participant RT as 🟨 Realtime
+
+    Note over User,RT: ━━━ PHASE 1: UPLOAD (sync REST) ━━━
+    User->>FE: PDF seç + yükle
+    FE->>GW: POST /api/v1/documents (multipart)
+    GW->>DOC: POST /documents
+    DOC->>MINIO: PUT object (tenant/<uuid>/file.pdf)
+    DOC->>DOC: Tika parse → text + metadata
+    DOC->>DOC: Postgres INSERT (RLS otomatik tenant_id)
+    DOC-->>GW: 202 Accepted {job_id, doc_id}
+    GW-->>FE: 202 Accepted
+    DOC->>REDIS: XADD doc.uploaded.v1 {doc_id, tenant_id, ...}
+
+    Note over User,RT: ━━━ PHASE 2: INGESTION (async) ━━━
+    REDIS-->>PROC: XREADGROUP doc.uploaded
+    PROC->>PROC: Semantic chunk (paragraph + sentence)
+    PROC->>PROC: tantivy BM25 index update
+    PROC->>REDIS: XADD doc.chunked.v1 {doc_id, chunks[]}
+    REDIS-->>AI: XREADGROUP doc.chunked
+    AI->>AI: sentence-transformers embed each chunk
+    AI->>QD: upsert vectors (tenant_id payload)
+    AI->>REDIS: XADD doc.ready.v1 {doc_id}
+
+    Note over User,RT: ━━━ PHASE 3: STATUS PUSH (server push) ━━━
+    REDIS-->>RT: XREADGROUP doc.ready
+    RT->>FE: WebSocket: {type: doc_ready, doc_id}
+    FE->>User: Toast "Doküman hazır"
+
+    Note over User,RT: ━━━ PHASE 4: QUESTION (sync + SSE + gRPC) ━━━
+    User->>FE: "Geçen yılki gelirimiz neydi?"
+    FE->>GW: POST /api/v1/chat (SSE)
+    GW->>AI: POST /chat
+    AI->>AI: agent loop başlat
+    AI->>LLM: prompt + tool definitions
+    LLM-->>AI: tool_use: doc_search("gelir 2025")
+    AI->>AI: embed query
+    AI->>QD: dense search → top-20
+    AI->>PROC: gRPC BM25Search → top-20
+    AI->>AI: Reciprocal Rank Fusion → top-5
+    AI->>AI: cross-encoder rerank → top-3
+    AI->>LLM: tool_result: 3 chunks + kaynak ref
+    LLM-->>AI: token stream başlar
+    loop her token
+        AI->>REDIS: XADD llm.token.streamed.v1
+        REDIS-->>RT: XREADGROUP llm.token.streamed
+        RT->>FE: WebSocket: {type: token, text: "..."}
+        FE->>User: anlık token render
+    end
+    LLM-->>AI: stop
+    AI->>REDIS: XADD llm.token.streamed.v1 {type: done, sources: [...]}
+    RT->>FE: WebSocket: {type: done, sources}

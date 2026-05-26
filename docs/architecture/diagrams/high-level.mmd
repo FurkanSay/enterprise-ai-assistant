@@ -1,0 +1,79 @@
+%% High-level architecture diagram
+%% Render: https://mermaid.live/ or any Mermaid-compatible viewer
+graph TB
+    Browser["🌐 Browser<br/>Next.js 15"]
+
+    subgraph Edge["Edge Layer"]
+        GW["🟦 Gateway<br/>C# .NET 10 / YARP<br/>:8080"]
+    end
+
+    subgraph Application["Application Services"]
+        ID["🟦 Identity<br/>C# .NET 10<br/>:8081"]
+        DOC["☕ Documents<br/>Java Spring Boot 3<br/>:8082"]
+        PROC["🦀 Processing<br/>Rust Axum<br/>:8083"]
+        AI["🐍 AI Engine<br/>Python FastAPI<br/>:8084"]
+        RT["🟨 Realtime<br/>TS NestJS<br/>:8085"]
+    end
+
+    subgraph Data["Data Layer"]
+        PG[("🐘 Postgres 16<br/>+ pgvector + RLS")]
+        REDIS[("🔴 Redis 7<br/>Streams")]
+        MINIO[("📦 MinIO<br/>S3")]
+        QDRANT[("🧭 Qdrant<br/>Vectors")]
+    end
+
+    subgraph Observability["Observability"]
+        OTEL["📡 OTel Collector"]
+        JAEGER["🔍 Jaeger"]
+        PROM["📊 Prometheus"]
+        GRAF["📈 Grafana"]
+    end
+
+    Browser -.->|"REST + JWT"| GW
+    Browser <-.->|"WebSocket"| RT
+
+    GW -->|REST| ID
+    GW -->|REST| DOC
+    GW -->|REST + SSE| AI
+
+    ID --> PG
+    DOC --> PG
+    DOC --> MINIO
+    DOC -.->|"publish doc.ingested.v1"| REDIS
+
+    REDIS -.->|"consume"| PROC
+    REDIS -.->|"consume"| AI
+
+    PROC <-->|"gRPC BM25Search"| AI
+
+    AI --> QDRANT
+    AI --> PG
+    AI -.->|"publish llm.token.streamed.v1"| REDIS
+
+    REDIS -.->|"consume"| RT
+
+    ID -. OTLP .-> OTEL
+    DOC -. OTLP .-> OTEL
+    PROC -. OTLP .-> OTEL
+    AI -. OTLP .-> OTEL
+    RT -. OTLP .-> OTEL
+    GW -. OTLP .-> OTEL
+    OTEL --> JAEGER
+    OTEL --> PROM
+    PROM --> GRAF
+
+    classDef gw fill:#512BD4,color:#fff,stroke:#3a1e98
+    classDef java fill:#007396,color:#fff,stroke:#004f63
+    classDef rust fill:#CE422B,color:#fff,stroke:#8e2e1d
+    classDef py fill:#3776AB,color:#fff,stroke:#234567
+    classDef ts fill:#3178C6,color:#fff,stroke:#1f5694
+    classDef data fill:#fffae0,color:#333,stroke:#aa9
+    classDef obs fill:#e8f4ff,color:#333,stroke:#789
+
+    class GW,ID gw
+    class DOC java
+    class PROC rust
+    class AI py
+    class RT ts
+    class PG,REDIS,MINIO,QDRANT data
+    class OTEL,JAEGER,PROM,GRAF obs

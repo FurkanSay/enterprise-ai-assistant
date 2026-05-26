@@ -1,0 +1,37 @@
+name: documents-ci
+
+on:
+  pull_request:
+    paths:
+      - 'services/documents/**'
+      - '.github/workflows/documents-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/documents/**'
+
+defaults:
+  run:
+    working-directory: services/documents
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verify (compile + test — Testcontainers needs Docker, available on hosted runner)
+        run: mvn -B verify
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: documents-test-reports
+          path: services/documents/target/surefire-reports/
+          retention-days: 7

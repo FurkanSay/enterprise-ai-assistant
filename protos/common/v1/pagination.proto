@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package common.v1;
+
+// Cursor-based pagination (preferred over offset for large result sets).
+// Cursors are opaque, base64-encoded server-state. Do not parse client-side.
+message PageRequest {
+  // Max items to return. Server enforces hard cap (typically 100).
+  // 0 means "use server default" (typically 20).
+  int32 page_size = 1;
+
+  // Opaque cursor returned by previous response. Empty on first request.
+  string page_token = 2;
+}
+
+message PageResponse {
+  // Cursor for the next page. Empty if no more results.
+  string next_page_token = 1;
+
+  // Optional total count (server may decline to compute for cost reasons).
+  // -1 means "unknown / not computed".
+  int64 total_size = 2;
+}

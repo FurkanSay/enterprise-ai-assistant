@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package processing.v1;
+
+import "common/v1/tenant.proto";
+
+// ProcessingService — Rust microservice for CPU-bound chunking + BM25 search.
+//
+// AI Engine calls this synchronously for hybrid retrieval (Qdrant dense + BM25 sparse).
+// Documents service does NOT call this directly; chunking is event-driven via Redis.
+service ProcessingService {
+  // BM25 keyword search over indexed document chunks.
+  // Tenant-scoped — only returns chunks belonging to the calling tenant.
+  rpc BM25Search(BM25SearchRequest) returns (BM25SearchResponse);
+
+  // Re-index a document (used after document edit or chunking strategy change).
+  // Async-fire-and-return: actual work happens via Redis event consumer.
+  rpc Reindex(ReindexRequest) returns (ReindexResponse);
+}
+
+// ─── BM25 search ─────────────────────────────────────────────────────────
+
+message BM25SearchRequest {
+  common.v1.TenantContext tenant_context = 1;
+  // Search query — natural language; ProcessingService tokenizes
+  string query = 2;
+  // Max results to return (capped at 100)
+  int32 top_k = 3;
+  // Optional: restrict search to specific documents
+  repeated string document_ids = 4;
+  // Optional: minimum BM25 score threshold (0 = no threshold)
+  float min_score = 5;
+}
+
+message BM25SearchResponse {
+  repeated BM25Hit hits = 1;
+  // Server-side processing time in milliseconds (for AI Engine telemetry)
+  int32 took_ms = 2;
+}
+
+message BM25Hit {
+  // Chunk ID — matches Qdrant point ID for fusion
+  string chunk_id = 1;
+  // Source document
+  string document_id = 2;
+  // BM25 score (higher = better match)
+  float score = 3;
+  // Chunk text (may be truncated for response size)
+  string text = 4;
+  // Position in document
+  int32 sequence = 5;
+  // Optional source location (page number, heading)
+  string source_location = 6;
+}
+
+// ─── Reindex ─────────────────────────────────────────────────────────────
+
+message ReindexRequest {
+  common.v1.TenantContext tenant_context = 1;
+  string document_id = 2;
+  // If true, deletes existing chunks before reprocessing
+  bool full_rebuild = 3;
+}
+
+message ReindexResponse {
+  // Tracking ID for status queries (future: GetReindexStatus)
+  string reindex_id = 1;
+  // Current snapshot of status
+  string status = 2;
+}
