@@ -14,6 +14,7 @@ Bu klasörde projenin **karar dökümanları** var. Her ADR:
 | [002](./002-shared-db-rls.md) | Shared Postgres + tenant_id + RLS | Accepted | Multi-tenant izolasyon stratejisi (6-katmanlı defense) |
 | [003](./003-grpc-contracts.md) | gRPC Contracts as Source of Truth | Accepted | `protos/` + buf, code-gen, versioning |
 | [004](./004-event-naming-versioning.md) | Event Naming & Versioning | Accepted | Redis Streams event taxonomy + envelope schema |
+| [005](./005-ui-design-system.md) | UI Design System | Accepted | shadcn/ui + Claude-adjacent neutral theme + Inter/Source Serif |
 
 ## Diagrams
 
