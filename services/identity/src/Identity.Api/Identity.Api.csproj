@@ -23,4 +23,9 @@
     <ProjectReference Include="..\Identity.Infrastructure\Identity.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!-- Generated gRPC stubs — Identity exposes IdentityService over gRPC. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\libs\generated\dotnet\Kai.Protos.csproj" />
+  </ItemGroup>
+
 </Project>

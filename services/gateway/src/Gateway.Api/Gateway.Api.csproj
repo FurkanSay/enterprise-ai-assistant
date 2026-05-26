@@ -36,4 +36,9 @@
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
   </ItemGroup>
 
+  <!-- Generated gRPC client stubs (source of truth: protos/). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\libs\generated\dotnet\Kai.Protos.csproj" />
+  </ItemGroup>
+
 </Project>
