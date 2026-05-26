@@ -170,8 +170,10 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kai}?currentSchema=documents_schema
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kai}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-kai_dev_pwd}
+      # Connecting as documents_user (NOT kai) is what makes FORCE RLS bite.
+      # `kai` has BYPASSRLS and would silently see cross-tenant rows.
+      SPRING_DATASOURCE_USERNAME: ${DOCUMENTS_DB_USER:-documents_user}
+      SPRING_DATASOURCE_PASSWORD: ${DOCUMENTS_DB_PASSWORD:-documents_dev_pwd}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-kai_admin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-kai_minio_pwd}
