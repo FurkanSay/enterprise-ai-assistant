@@ -8,6 +8,10 @@
     <AssemblyName>Gateway.Api</AssemblyName>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- NU1902/NU1903 (known vulnerabilities in transitive OTel packages)
+         are tracked separately; do not fail the build until upstream
+         publishes patched 1.11+ versions for .NET 10. -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

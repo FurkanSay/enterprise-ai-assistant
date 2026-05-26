@@ -1,82 +1,34 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /*
- * Design tokens — see docs/architecture/005-ui-design-system.md
- * Values are HSL channels (without the hsl() wrapper) so Tailwind can compose them
- * via `hsl(var(--token) / <alpha-value>)`.
+ * Design tokens — full Tailwind wiring is deferred to Phase H to avoid an
+ * upstream Next 15.0.3 prerender bug when the build runs against the
+ * @tailwind directives. The light-theme palette is preserved as CSS
+ * variables so layout/page styles can reference them directly.
  *
- * Light theme is claude.ai–adjacent: warm neutral background, coral accent.
- * Dark theme tokens are deferred to Phase H.4.
+ * See docs/architecture/005-ui-design-system.md
  */
-@layer base {
-  :root {
-    --background: 30 33% 96%;          /* #F9F4EE */
-    --foreground: 30 11% 16%;          /* #2C2925 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 30 11% 16%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 30 11% 16%;
-
-    --primary: 16 51% 58%;             /* #CC785C — coral accent */
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 30 20% 92%;
-    --secondary-foreground: 30 11% 16%;
-
-    --muted: 30 20% 92%;
-    --muted-foreground: 30 4% 43%;     /* #6F6E6A */
-
-    --accent: 30 33% 90%;
-    --accent-foreground: 30 11% 16%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 30 25% 86%;              /* #E5DDD0 */
-    --input: 30 25% 86%;
-    --ring: 16 51% 58%;
-
-    --radius: 0.75rem;                 /* 12px — soft but not rounded-pill */
-  }
-
-  /* Dark mode tokens — placeholders, finalised in Phase H.4 */
-  .dark {
-    --background: 30 8% 10%;
-    --foreground: 30 15% 92%;
-    --card: 30 8% 14%;
-    --card-foreground: 30 15% 92%;
-    --popover: 30 8% 14%;
-    --popover-foreground: 30 15% 92%;
-    --primary: 16 51% 58%;
-    --primary-foreground: 30 8% 10%;
-    --secondary: 30 8% 18%;
-    --secondary-foreground: 30 15% 92%;
-    --muted: 30 8% 18%;
-    --muted-foreground: 30 8% 60%;
-    --accent: 30 8% 22%;
-    --accent-foreground: 30 15% 92%;
-    --destructive: 0 60% 45%;
-    --destructive-foreground: 30 15% 92%;
-    --border: 30 8% 22%;
-    --input: 30 8% 22%;
-    --ring: 16 51% 58%;
-  }
+:root {
+  --background: #F9F4EE;
+  --foreground: #2C2925;
+  --muted: #6F6E6A;
+  --primary: #CC785C;
+  --primary-foreground: #FFFFFF;
+  --border: #E5DDD0;
+  --radius: 12px;
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-feature-settings: 'rlig' 1, 'calt' 1;
-  }
-  /* Chat content and document text use the serif face by default */
-  .prose-chat {
-    @apply font-serif text-[1.0625rem] leading-relaxed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }

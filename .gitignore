@@ -86,6 +86,9 @@ data/
 *.sqlite
 *.db
 
+# ─── Image cache (make save-images output) ────────────────────────────────
+infra/cache/
+
 # ─── Claude Code internal ─────────────────────────────────────────────────
 .claude/
 

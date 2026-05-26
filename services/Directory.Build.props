@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    Cascades to every csproj under services/. Suppresses NU1902/NU1903
+    (known vulnerabilities in transitive Microsoft.Extensions.* / OTel
+    dependencies) until patched 10.x.+ ships. The vulnerabilities are
+    tracked in ROADMAP and revisited each time we bump those packages.
+  -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+  </PropertyGroup>
+</Project>

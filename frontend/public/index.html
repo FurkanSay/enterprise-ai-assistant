@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Enterprise AI Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --background: #F9F4EE;
+      --foreground: #2C2925;
+      --muted: #6F6E6A;
+      --primary: #CC785C;
+      --border: #E5DDD0;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--background);
+      color: var(--foreground);
+      font-family: 'Inter', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    main {
+      max-width: 720px;
+      margin: 6rem auto;
+      padding: 0 1.5rem;
+    }
+    h1 {
+      font-size: 2.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .tagline {
+      margin-top: 1rem;
+      color: var(--muted);
+      font-size: 1.0625rem;
+    }
+    .card {
+      margin-top: 2.5rem;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem 2rem;
+      font-family: 'Source Serif 4', Georgia, serif;
+      line-height: 1.6;
+    }
+    .card p { margin: 0 0 0.75rem; }
+    .card p:last-child { margin-bottom: 0; }
+    .status {
+      margin-top: 2rem;
+      display: inline-block;
+      padding: 0.25rem 0.625rem;
+      background: rgba(204, 120, 92, 0.12);
+      color: var(--primary);
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+    }
+    .meta {
+      margin-top: 3rem;
+      font-size: 0.8125rem;
+      color: var(--muted);
+    }
+    .meta a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .meta a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="status">Phase B · skeleton standing up</span>
+    <h1 style="margin-top: 0.75rem">Enterprise AI Assistant</h1>
+    <p class="tagline">
+      Multi-tenant retrieval-augmented assistant for company documents.
+    </p>
+
+    <div class="card">
+      <p>
+        This page is the placeholder served while the backend stack
+        (Gateway, Identity, Documents, Processing, AI Engine, Realtime)
+        comes up under Docker Compose. The full Next.js chat surface
+        arrives in Phase H of the roadmap.
+      </p>
+      <p>
+        Backend health probes are reachable at
+        <code>/health/live</code> behind the API Gateway on port 8080.
+      </p>
+    </div>
+
+    <p class="meta">
+      Source: <a href="https://github.com/FurkanSay/enterprise-ai-assistant">github.com/FurkanSay/enterprise-ai-assistant</a>
+    </p>
+  </main>
+</body>
+</html>

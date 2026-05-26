@@ -91,6 +91,29 @@ redis-shell: ## Open redis-cli
 seed: ## Seed minimal demo data (1 tenant + 1 user + 1 doc)
 	./scripts/seed.sh
 
+# ─── Image cache (offline backup) ─────────────────────────────────────────
+# Save built service images as tarballs so that a Docker Desktop reset or
+# pruned builder cache does not force a multi-GB re-download (especially
+# AI Engine's PyTorch wheel). Tarballs live in infra/cache/ — gitignored.
+
+IMAGE_SERVICES := gateway identity documents processing aiengine realtime frontend
+IMAGE_CACHE_DIR := infra/cache
+
+save-images: ## Dump all service images to infra/cache/*.tar
+	@mkdir -p $(IMAGE_CACHE_DIR)
+	@for svc in $(IMAGE_SERVICES); do \
+	  echo "📦 saving $$svc..."; \
+	  docker save -o $(IMAGE_CACHE_DIR)/$$svc.tar kurumsal-ai-asistan-$$svc:latest; \
+	done
+	@echo "✅ Images saved to $(IMAGE_CACHE_DIR)/"
+
+load-images: ## Reload service images from infra/cache/*.tar
+	@for tar in $(IMAGE_CACHE_DIR)/*.tar; do \
+	  echo "📥 loading $$tar..."; \
+	  docker load -i $$tar; \
+	done
+	@echo "✅ Images restored."
+
 # ─── Cleanup ──────────────────────────────────────────────────────────────
 
 clean: down ## Stop containers (data preserved)

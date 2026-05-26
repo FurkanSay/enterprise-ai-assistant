@@ -93,9 +93,13 @@ services:
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
       - ./infra/otel-collector/config.yaml:/etc/otel/config.yaml:ro
-    ports:
-      - "8888:8888"   # collector metrics
-      - "8889:8889"   # exporter metrics
+    # Collector OTLP endpoints are reached over the internal Docker network
+    # by all other services; no host port mapping needed. Prometheus scrapes
+    # the collector via Docker DNS, also internal.
+    expose:
+      - "4317"   # OTLP gRPC
+      - "4318"   # OTLP HTTP
+      - "8889"   # prometheus exporter (scraped by Prometheus)
     depends_on:
       - jaeger
 
@@ -125,8 +129,8 @@ services:
 
   gateway:
     build:
-      context: ./services/gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/gateway/Dockerfile
     container_name: kai-gateway
     ports:
       - "8080:8080"
@@ -143,8 +147,8 @@ services:
 
   identity:
     build:
-      context: ./services/identity
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/identity/Dockerfile
     container_name: kai-identity
     ports:
       - "8081:8081"
@@ -158,8 +162,8 @@ services:
 
   documents:
     build:
-      context: ./services/documents
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/documents/Dockerfile
     container_name: kai-documents
     ports:
       - "8082:8082"
@@ -183,8 +187,8 @@ services:
 
   processing:
     build:
-      context: ./services/processing
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/processing/Dockerfile
     container_name: kai-processing
     ports:
       - "8083:8083"
@@ -198,8 +202,8 @@ services:
 
   aiengine:
     build:
-      context: ./services/aiengine
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/aiengine/Dockerfile
     container_name: kai-aiengine
     ports:
       - "8084:8084"
@@ -224,8 +228,8 @@ services:
 
   realtime:
     build:
-      context: ./services/realtime
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/realtime/Dockerfile
     container_name: kai-realtime
     ports:
       - "8085:8085"
@@ -239,8 +243,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: kai-frontend
     ports:
       - "3000:3000"

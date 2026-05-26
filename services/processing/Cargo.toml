@@ -4,10 +4,10 @@ members = [
     "crates/processing-server",
     "crates/chunker",
     "crates/bm25-index",
-    # Generated gRPC stubs live outside services/processing/ but are owned
-    # by this workspace so they share lockfile + version resolution.
-    "../../libs/generated/rust",
 ]
+# kai-protos at libs/generated/rust is a standalone crate consumed via the
+# workspace-level path dependency below. It is NOT a workspace member: Cargo
+# requires workspace members to live below the workspace root.
 
 [workspace.package]
 version = "0.1.0"
