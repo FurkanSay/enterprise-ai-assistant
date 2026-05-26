@@ -6,6 +6,15 @@ requires-python = ">=3.12"
 readme = "README.md"
 license = { text = "MIT" }
 
+# Phase C runs on the core dependency set only — FastAPI, LiteLLM, SQLAlchemy,
+# Redis, OpenTelemetry. The RAG-side ML stack (torch, sentence-transformers,
+# qdrant-client) is gated behind the `ml` extra so the base image stays under
+# 300 MB and Docker Desktop on WSL2 doesn't drop the named pipe trying to
+# commit a 2 GB layer.
+#
+# Phase D will switch the build to `uv sync --extra ml` once embeddings and
+# vector search are actually called by the running agent loop.
+
 dependencies = [
     # ─── Generated gRPC stubs (source of truth: protos/) ───────────────────
     "kai-protos",
@@ -22,25 +31,15 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
-    "pgvector>=0.3.6",
 
     # ─── Redis ─────────────────────────────────────────────────────────────
     "redis[hiredis]>=5.2.0",
 
-    # ─── LLM + RAG ─────────────────────────────────────────────────────────
+    # ─── LLM ───────────────────────────────────────────────────────────────
     "litellm>=1.52.0",
-    "anthropic>=0.39.0",
-    "openai>=1.55.0",
-    # torch is pinned to the CPU index (see [tool.uv.sources] below).
-    # Listing it explicitly here lets the index override the GPU wheel
-    # that sentence-transformers would otherwise pull transitively.
-    "torch>=2.4",
-    "sentence-transformers>=3.3.0",
-    "qdrant-client>=1.12.0",
 
     # ─── gRPC (Processing client + AiEngineService server) ─────────────────
     "grpcio>=1.68.0",
-    "grpcio-tools>=1.68.0",
     "protobuf>=5.28.0",
 
     # ─── Observability ─────────────────────────────────────────────────────
@@ -58,6 +57,18 @@ dependencies = [
     "tenacity>=9.0.0",
     "python-ulid>=3.0.0",
     "orjson>=3.10.0",
+]
+
+[project.optional-dependencies]
+# Phase D extra — uv sync --extra ml installs these on top of the base set.
+ml = [
+    "torch>=2.4",
+    "sentence-transformers>=3.3.0",
+    "qdrant-client>=1.12.0",
+    "pgvector>=0.3.6",
+    "anthropic>=0.39.0",
+    "openai>=1.55.0",
+    "grpcio-tools>=1.68.0",
 ]
 
 [dependency-groups]
@@ -78,17 +89,14 @@ build-backend = "hatchling.build"
 packages = ["src/aiengine"]
 
 [[tool.uv.index]]
-# CPU-only PyTorch wheels — avoids dragging in ~2GB of nvidia-* CUDA wheels.
-# We don't have a GPU on the deployment target, so the GPU build is dead weight
-# and the cause of repeated BuildKit/Docker Desktop pipe drops during commit.
+# CPU-only PyTorch wheels — kept here so that `uv sync --extra ml` still
+# avoids the multi-GB nvidia-* CUDA wheels.
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
-# Path dep — editable so regenerated stubs are picked up without re-install.
 kai-protos = { path = "../../libs/generated/python", editable = true }
-# Force torch (and any wheel it resolves) to come from the CPU index.
 torch = { index = "pytorch-cpu" }
 
 [tool.ruff]
@@ -97,7 +105,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
-ignore = ["E501"]  # handled by formatter
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

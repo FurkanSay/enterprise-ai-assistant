@@ -214,8 +214,10 @@ services:
       QDRANT_URL: http://qdrant:6333
       PROCESSING_GRPC_URL: processing:8083
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-openrouter/anthropic/claude-3.5-sonnet}
     depends_on:
       postgres:
         condition: service_healthy

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from aiengine.api.middleware import TenantContextMiddleware, RequestIdMiddleware
 from aiengine.api.routes import chat, documents, health, sessions
 from aiengine.core.config import get_settings
+from aiengine.core.db import dispose_engine
 from aiengine.core.logging import configure_logging, get_logger
 from aiengine.core.telemetry import configure_telemetry, shutdown_telemetry
 
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     log.info("aiengine.shutdown")
+    await dispose_engine()
     shutdown_telemetry()
 
 

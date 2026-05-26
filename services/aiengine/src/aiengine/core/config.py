@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     processing_grpc_url: str = "localhost:8083"
 
     # ─── LLM providers ───────────────────────────────────────────────────
+    # OpenRouter is the primary gateway; LiteLLM picks the right downstream
+    # provider from the `openrouter/...` model prefix. The native keys are
+    # only used when a request explicitly targets a non-openrouter model.
+    openrouter_api_key: str = ""
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     cohere_api_key: str = ""
@@ -56,7 +60,7 @@ class Settings(BaseSettings):
     # ─── Defaults ────────────────────────────────────────────────────────
     default_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     default_reranker_model: str = "BAAI/bge-reranker-v2-m3"
-    default_llm_model: str = "claude-opus-4-7"
+    default_llm_model: str = "openrouter/anthropic/claude-3.5-sonnet"
     max_tool_iterations_free: int = 10
     max_tool_iterations_pro: int = 50
     max_tokens_per_request: int = 8192

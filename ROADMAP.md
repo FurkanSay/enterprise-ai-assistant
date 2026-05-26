@@ -54,15 +54,21 @@
     script source of truth), override.yml processing volume mount (binary'i gizliyordu)
   - Frontend + Realtime: containers up, sadece health probe endpoint mismatch (Phase H'de düzelir)
 
-## Phase C — AI Engine end-to-end smoke ⏳
+## Phase C — AI Engine end-to-end smoke ✅
 
-> Mock tool ile gerçek LLM streaming.
+> LLM stream → DB persist → SSE eventleri kullanıcıya akıyor.
 
-- [ ] `litellm_provider.stream_completion` gerçek implementasyon (Anthropic ile)
-- [ ] Session + Message DB persistence
-- [ ] `web_fetch` tool implementation (httpx + readability)
-- [ ] `/v1/chat` SSE end-to-end: prompt → LLM → token stream → response
-- [ ] AI Engine smoke test (gerçek Anthropic API key ile)
+- [x] `litellm_provider.stream_completion` gerçek implementasyon (OpenRouter via LiteLLM)
+- [x] Session + Message DB persistence (SQLAlchemy async + tenant_session)
+- [x] `/v1/chat` SSE end-to-end: prompt → LLM → token stream → response
+- [x] AI Engine smoke test (gerçek OpenRouter ile, token akışı + DB persist doğrulandı)
+- [ ] `web_fetch` tool implementation (Phase D — tool_use round-trip için lazım)
+
+Phase C side-effects:
+- `pyproject.toml`: pytorch / sentence-transformers / qdrant-client `[project.optional-dependencies.ml]` grubuna alındı.
+  Base image **1.94 GB → 605 MB**, build I/O Docker Desktop pipe'ını artık devirmiyor.
+- `tools/builtin/__init__.py`: doc_search ImportError'a karşı conditional (ml extra olmadan da boot eder).
+- .env / .env.example: default model OpenRouter namespace'inde (`openrouter/google/gemma-4-31b-it:free` zero-cost demo).
 
 ## Phase D — Documents service ⏳
 
