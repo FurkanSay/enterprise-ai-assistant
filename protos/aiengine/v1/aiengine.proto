@@ -8,23 +8,18 @@ import "common/v1/tenant.proto";
 // This gRPC service exists for two cases:
 //   1. Internal triggers from other services (e.g. background re-embed batch)
 //   2. Future: agent-to-agent calls (sub-agent orchestration)
+//
+// Each RPC owns its request and response message so new fields can be added
+// to a single RPC without affecting the others.
 service AiEngineService {
   // Trigger embedding for a batch of chunks (called by Processing after chunking).
   rpc EmbedChunks(EmbedChunksRequest) returns (EmbedChunksResponse);
 
   // Get session metadata (read-only).
-  rpc GetSession(GetSessionRequest) returns (Session);
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
 }
 
-// ─── Embedding ───────────────────────────────────────────────────────────
-
-message EmbedChunksRequest {
-  common.v1.TenantContext tenant_context = 1;
-  string document_id = 2;
-  repeated ChunkToEmbed chunks = 3;
-  // Embedding model override (defaults to tenant default)
-  string model = 4;
-}
+// ─── Domain types ────────────────────────────────────────────────────────
 
 message ChunkToEmbed {
   string chunk_id = 1;
@@ -33,21 +28,11 @@ message ChunkToEmbed {
   string source_location = 4;
 }
 
-message EmbedChunksResponse {
-  // Number of chunks successfully embedded + written to Qdrant
-  int32 embedded_count = 1;
-  // Chunks that failed (with error reasons)
-  repeated EmbedFailure failures = 2;
-  int32 took_ms = 3;
-}
-
 message EmbedFailure {
   string chunk_id = 1;
   string error_code = 2;
   string error_message = 3;
 }
-
-// ─── Session (read-only via gRPC; mutations via REST) ────────────────────
 
 message Session {
   string id = 1;
@@ -60,7 +45,31 @@ message Session {
   string updated_at = 8;
 }
 
+// ─── EmbedChunks ─────────────────────────────────────────────────────────
+
+message EmbedChunksRequest {
+  common.v1.TenantContext tenant_context = 1;
+  string document_id = 2;
+  repeated ChunkToEmbed chunks = 3;
+  // Embedding model override (defaults to tenant default)
+  string model = 4;
+}
+
+message EmbedChunksResponse {
+  // Number of chunks successfully embedded + written to Qdrant
+  int32 embedded_count = 1;
+  // Chunks that failed (with error reasons)
+  repeated EmbedFailure failures = 2;
+  int32 took_ms = 3;
+}
+
+// ─── GetSession ──────────────────────────────────────────────────────────
+
 message GetSessionRequest {
   common.v1.TenantContext tenant_context = 1;
   string session_id = 2;
+}
+
+message GetSessionResponse {
+  Session session = 1;
 }

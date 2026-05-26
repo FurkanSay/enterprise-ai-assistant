@@ -8,19 +8,23 @@ import "google/protobuf/timestamp.proto";
 
 // DocumentsService — internal gRPC API for the Documents microservice.
 // Frontend uses REST via Gateway; this is for service-to-service calls.
+//
+// Each RPC has its own request and response message even when the payload
+// would otherwise repeat. This keeps the API backwards-compatible when new
+// fields need to be added to a single RPC.
 service DocumentsService {
   // Fetch document metadata by ID. Tenant-scoped (RLS enforced).
-  rpc GetDocument(GetDocumentRequest) returns (Document);
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse);
 
   // List documents for the current tenant.
   rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
 
   // Get presigned download URL for the original file (MinIO).
-  rpc GetDocumentDownloadUrl(GetDocumentRequest) returns (DownloadUrl);
+  rpc GetDocumentDownloadUrl(GetDocumentDownloadUrlRequest) returns (GetDocumentDownloadUrlResponse);
 
   // Get full extracted text of a document (used by Processing for chunking).
   // Returns text stream for memory efficiency on large docs.
-  rpc GetDocumentText(GetDocumentRequest) returns (stream TextChunk);
+  rpc GetDocumentText(GetDocumentTextRequest) returns (stream GetDocumentTextResponse);
 }
 
 // ─── Domain types ────────────────────────────────────────────────────────
@@ -66,12 +70,18 @@ message DownloadUrl {
   google.protobuf.Timestamp expires_at = 2;
 }
 
-// ─── Request / Response wrappers ─────────────────────────────────────────
+// ─── GetDocument ─────────────────────────────────────────────────────────
 
 message GetDocumentRequest {
   common.v1.TenantContext tenant_context = 1;
   string document_id = 2;
 }
+
+message GetDocumentResponse {
+  Document document = 1;
+}
+
+// ─── ListDocuments ───────────────────────────────────────────────────────
 
 message ListDocumentsRequest {
   common.v1.TenantContext tenant_context = 1;
@@ -83,4 +93,26 @@ message ListDocumentsRequest {
 message ListDocumentsResponse {
   repeated Document documents = 1;
   common.v1.PageResponse page = 2;
+}
+
+// ─── GetDocumentDownloadUrl ──────────────────────────────────────────────
+
+message GetDocumentDownloadUrlRequest {
+  common.v1.TenantContext tenant_context = 1;
+  string document_id = 2;
+}
+
+message GetDocumentDownloadUrlResponse {
+  DownloadUrl download_url = 1;
+}
+
+// ─── GetDocumentText (server-streaming) ──────────────────────────────────
+
+message GetDocumentTextRequest {
+  common.v1.TenantContext tenant_context = 1;
+  string document_id = 2;
+}
+
+message GetDocumentTextResponse {
+  TextChunk chunk = 1;
 }

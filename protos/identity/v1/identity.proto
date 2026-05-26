@@ -7,34 +7,23 @@ import "common/v1/tenant.proto";
 // IdentityService — internal gRPC API for the Identity microservice.
 // Gateway calls these during JWT validation and authorization.
 // End-user auth flows (login, refresh) are REST/OIDC (not here).
+//
+// Each RPC has its own request and response message, even when the
+// payload would otherwise repeat, so that new fields can be added per RPC
+// without breaking the others.
 service IdentityService {
   // Validate JWT and resolve to a TenantContext.
   // Gateway calls this on every protected request.
   rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
 
   // Look up user by ID. Used for audit log enrichment.
-  rpc GetUser(GetUserRequest) returns (User);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
 
   // Look up tenant by ID. Used for tenant quota / config lookups.
-  rpc GetTenant(GetTenantRequest) returns (Tenant);
+  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
 }
 
-// ─── Token validation ────────────────────────────────────────────────────
-
-message ValidateTokenRequest {
-  string jwt = 1;
-}
-
-message ValidateTokenResponse {
-  bool valid = 1;
-  // Populated only when valid=true.
-  // Gateway forwards this as tenant_context in downstream calls.
-  common.v1.TenantContext tenant_context = 2;
-  // Populated when invalid (expired, wrong issuer, etc.)
-  string error_code = 3;
-}
-
-// ─── User / Tenant lookups ───────────────────────────────────────────────
+// ─── Domain types ────────────────────────────────────────────────────────
 
 message User {
   string id = 1;
@@ -44,11 +33,6 @@ message User {
   repeated string roles = 5;
   bool is_active = 6;
   string created_at = 7;
-}
-
-message GetUserRequest {
-  common.v1.TenantContext tenant_context = 1;
-  string user_id = 2;
 }
 
 message Tenant {
@@ -67,7 +51,39 @@ message TenantQuotas {
   int64 max_storage_bytes = 4;
 }
 
+// ─── ValidateToken ───────────────────────────────────────────────────────
+
+message ValidateTokenRequest {
+  string jwt = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  // Populated only when valid=true.
+  // Gateway forwards this as tenant_context in downstream calls.
+  common.v1.TenantContext tenant_context = 2;
+  // Populated when invalid (expired, wrong issuer, etc.)
+  string error_code = 3;
+}
+
+// ─── GetUser ─────────────────────────────────────────────────────────────
+
+message GetUserRequest {
+  common.v1.TenantContext tenant_context = 1;
+  string user_id = 2;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+// ─── GetTenant ───────────────────────────────────────────────────────────
+
 message GetTenantRequest {
   common.v1.TenantContext tenant_context = 1;
   string tenant_id = 2;
+}
+
+message GetTenantResponse {
+  Tenant tenant = 1;
 }

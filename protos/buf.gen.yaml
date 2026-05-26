@@ -28,12 +28,9 @@ plugins:
   - remote: buf.build/grpc/python:v1.66.0
     out: ../libs/generated/python
 
-  # ─── TypeScript (Connect-ES) ────────────────────────────────────────────
-  - remote: buf.build/community/bufbuild-es:v2.2.0
-    out: ../libs/generated/typescript
-    opt:
-      - target=ts
-  - remote: buf.build/community/connectrpc-es:v1.6.0
-    out: ../libs/generated/typescript
-    opt:
-      - target=ts
+  # ─── TypeScript — added in Phase H ──────────────────────────────────────
+  # The Realtime service uses WebSocket, not gRPC, and the Frontend only
+  # consumes REST through the Gateway. TypeScript stubs are not needed yet.
+  # When they are, the plugin choice will be Connect-ES via:
+  #   - remote: buf.build/connectrpc/es
+  #   - remote: buf.build/bufbuild/es

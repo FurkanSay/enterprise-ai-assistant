@@ -44,15 +44,19 @@ health: ## Hit every service /health/ready
 	done
 
 # ─── Proto (gRPC contracts) ───────────────────────────────────────────────
+# buf runs in Docker so contributors do not need a local install.
+# Pinned tag avoids surprise plugin/API changes.
+BUF_VERSION := 1.45.0
+BUF_DOCKER := docker run --rm -v "$(CURDIR):/workspace" -w /workspace/protos bufbuild/buf:$(BUF_VERSION)
 
-proto: ## Generate gRPC stubs for all languages
-	cd protos && buf generate
+proto: ## Generate gRPC stubs for all languages (Docker-backed buf)
+	$(BUF_DOCKER) generate
 
 proto-lint: ## Lint .proto files
-	cd protos && buf lint
+	$(BUF_DOCKER) lint
 
 proto-breaking: ## Detect breaking changes against main branch
-	cd protos && buf breaking --against ".git#branch=main"
+	$(BUF_DOCKER) breaking --against "/workspace/.git#branch=main,subdir=protos"
 
 # ─── Test ─────────────────────────────────────────────────────────────────
 
