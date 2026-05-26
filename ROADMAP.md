@@ -34,7 +34,11 @@
 > Servis stub'ları ve DB başlangıç verisi.
 
 - [x] **B1** `buf generate` → libs/generated/{dotnet,java,rust,python} (TypeScript Phase H'de)
-- [ ] **B2** Servislere stub bağla (csproj, pom, Cargo.toml, pyproject.toml)
+- [x] **B2** Servislere stub bağla
+  - Python (AI Engine): `kai-protos` path-editable dep
+  - Rust (Processing): `libs/generated/rust` workspace member + workspace dep
+  - C# (Gateway, Identity): paylaşımlı `Kai.Protos` csproj + ProjectReference
+  - Java (Documents): build-helper-maven-plugin ile source folder + gRPC runtime deps
 - [ ] **B3** Postgres migration scripts (Flyway for Java, EF Core for .NET, alembic for Python)
   - identity_schema.{tenants done, users, roles, refresh_tokens}
   - documents_schema.documents
