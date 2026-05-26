@@ -16,11 +16,11 @@ spring:
         jdbc.lob.non_contextual_creation: true
     open-in-view: false
   flyway:
-    enabled: true
-    default-schema: documents_schema
-    schemas: documents_schema
-    create-schemas: true
-    locations: classpath:db/migration
+    # Phase B3/B4 created the tables via Postgres init scripts. Flyway is
+    # disabled in Phase B5 to keep that bootstrap as the single source of
+    # truth. Phase E will re-enable it with proper versioned migrations
+    # owned by this service.
+    enabled: false
   servlet:
     multipart:
       max-file-size: 100MB

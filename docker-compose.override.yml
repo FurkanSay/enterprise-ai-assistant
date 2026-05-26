@@ -20,10 +20,10 @@ services:
       - ./services/documents/src:/app/src
       - documents_maven_cache:/root/.m2
 
-  processing:
-    volumes:
-      - ./services/processing:/app
-      - processing_cargo_cache:/usr/local/cargo/registry
+  # processing has no dev mount — the alpine runtime image only carries the
+  # statically-linked binary at /app/processing-server. Bind-mounting the
+  # host's services/processing tree over /app hid that binary and caused
+  # `exec: no such file or directory` for hours.
 
   aiengine:
     volumes:
@@ -49,7 +49,6 @@ services:
 
 volumes:
   documents_maven_cache:
-  processing_cargo_cache:
   realtime_node_modules:
   frontend_next_cache:
   frontend_node_modules:

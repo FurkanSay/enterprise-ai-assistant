@@ -31,6 +31,10 @@ dependencies = [
     "litellm>=1.52.0",
     "anthropic>=0.39.0",
     "openai>=1.55.0",
+    # torch is pinned to the CPU index (see [tool.uv.sources] below).
+    # Listing it explicitly here lets the index override the GPU wheel
+    # that sentence-transformers would otherwise pull transitively.
+    "torch>=2.4",
     "sentence-transformers>=3.3.0",
     "qdrant-client>=1.12.0",
 
@@ -73,9 +77,19 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/aiengine"]
 
+[[tool.uv.index]]
+# CPU-only PyTorch wheels — avoids dragging in ~2GB of nvidia-* CUDA wheels.
+# We don't have a GPU on the deployment target, so the GPU build is dead weight
+# and the cause of repeated BuildKit/Docker Desktop pipe drops during commit.
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
 # Path dep — editable so regenerated stubs are picked up without re-install.
 kai-protos = { path = "../../libs/generated/python", editable = true }
+# Force torch (and any wheel it resolves) to come from the CPU index.
+torch = { index = "pytorch-cpu" }
 
 [tool.ruff]
 line-length = 100

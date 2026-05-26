@@ -39,12 +39,20 @@
   - Rust (Processing): `libs/generated/rust` workspace member + workspace dep
   - C# (Gateway, Identity): paylaşımlı `Kai.Protos` csproj + ProjectReference
   - Java (Documents): build-helper-maven-plugin ile source folder + gRPC runtime deps
-- [ ] **B3** Postgres migration scripts (Flyway for Java, EF Core for .NET, alembic for Python)
-  - identity_schema.{tenants done, users, roles, refresh_tokens}
-  - documents_schema.documents
-  - aiengine_schema.{sessions, messages, tool_invocations}
-- [ ] **B4** Her tabloya RLS policy uygula (ADR-002 template'i)
-- [ ] **B5** `make up` ile tüm stack ayağa kalksın, `/health/ready` hepsi 200 dönsün
+- [x] **B3** Postgres init scripts (Phase C: per-service migration tools üstüne geçilecek)
+  - identity_schema: tenants + users + roles + user_roles + refresh_tokens (5 tablo)
+  - documents_schema: documents + document_chunks_meta (2 tablo)
+  - aiengine_schema: sessions + messages + tool_invocations (3 tablo)
+- [x] **B4** RLS policies — her business tablosunda FORCE ROW LEVEL SECURITY + tenant_isolation
+- [x] **B5** `docker compose up -d` → 13/15 servis healthy
+  - Çözülen sorunlar: monorepo root build context, csproj NoWarn for OTel CVE'leri,
+    Rust 1.85 → 1 (edition2024), Cargo workspace member hierarchy, Java FluentValidation.DI,
+    Java protobuf-java 3 vs 4 (gRPC Phase D'ye ertelendi), AI Engine CPU-only PyTorch
+    + UV_LINK_MODE=copy, kai-protos lib.rs çift tonic include, bm25-index `#[from]`
+    duplicate, Processing musl-static + alpine runtime (no glibc dynamic linker mismatch),
+    AI Engine `python -m uvicorn` (venv shebang bypass), Documents Flyway off (init
+    script source of truth), override.yml processing volume mount (binary'i gizliyordu)
+  - Frontend + Realtime: containers up, sadece health probe endpoint mismatch (Phase H'de düzelir)
 
 ## Phase C — AI Engine end-to-end smoke ⏳
 

@@ -10,26 +10,13 @@ description = "gRPC + Redis consumer server: chunking + BM25 indexing"
 name = "processing-server"
 path = "src/main.rs"
 
+# Phase B5 minimal — only what main.rs uses today. The full surface
+# (kai-protos for gRPC, tonic, redis consumer, OpenTelemetry pipeline)
+# comes back in Phase E.
 [dependencies]
-kai-protos.workspace = true
 tokio.workspace = true
 axum.workspace = true
-tonic.workspace = true
-prost.workspace = true
-tower.workspace = true
-tower-http.workspace = true
-http.workspace = true
 anyhow.workspace = true
-thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-tracing-opentelemetry.workspace = true
-opentelemetry.workspace = true
-opentelemetry_sdk.workspace = true
-opentelemetry-otlp.workspace = true
-serde.workspace = true
 serde_json.workspace = true
-redis.workspace = true
-uuid.workspace = true
-chunker = { path = "../chunker" }
-bm25-index = { path = "../bm25-index" }

@@ -9,6 +9,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
+# uv's default hardlink mode falls back to "full copy" on overlayfs (WSL2)
+# and produces millions of small-file syscalls during layer commit, which
+# regularly knocks the Docker Desktop named pipe offline. Direct copy is
+# slightly slower per-file but predictable and survives commit cleanly.
+ENV UV_LINK_MODE=copy
+
 # Bring in everything uv needs to resolve dependencies (including the
 # path-editable kai-protos at libs/generated/python/).
 COPY services/aiengine/pyproject.toml services/aiengine/
@@ -21,7 +27,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Copy real source and finalise install.
 WORKDIR /app
-COPY services/aiengine/src services/aiengine/src
+COPY services/aiengine/src       services/aiengine/src
+COPY services/aiengine/README.md services/aiengine/README.md
 
 WORKDIR /app/services/aiengine
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -50,4 +57,6 @@ EXPOSE 8084
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8084/health/live').read()" || exit 1
 
-CMD ["uvicorn", "aiengine.main:app", "--host", "0.0.0.0", "--port", "8084"]
+# Use `python -m uvicorn` so we don't depend on the uvicorn entrypoint's
+# baked-in shebang (which points at the venv's build-time path).
+CMD ["python", "-m", "uvicorn", "aiengine.main:app", "--host", "0.0.0.0", "--port", "8084"]
