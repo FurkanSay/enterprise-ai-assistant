@@ -7,6 +7,9 @@ readme = "README.md"
 license = { text = "MIT" }
 
 dependencies = [
+    # ─── Generated gRPC stubs (source of truth: protos/) ───────────────────
+    "kai-protos",
+
     # ─── Web framework ─────────────────────────────────────────────────────
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -69,6 +72,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aiengine"]
+
+[tool.uv.sources]
+# Path dep — editable so regenerated stubs are picked up without re-install.
+kai-protos = { path = "../../libs/generated/python", editable = true }
 
 [tool.ruff]
 line-length = 100
