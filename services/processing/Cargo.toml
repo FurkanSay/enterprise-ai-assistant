@@ -4,6 +4,9 @@ members = [
     "crates/processing-server",
     "crates/chunker",
     "crates/bm25-index",
+    # Generated gRPC stubs live outside services/processing/ but are owned
+    # by this workspace so they share lockfile + version resolution.
+    "../../libs/generated/rust",
 ]
 
 [workspace.package]
@@ -14,6 +17,9 @@ authors = ["Kurumsal AI Asistan"]
 license = "MIT"
 
 [workspace.dependencies]
+# ── Generated stubs (kai-protos crate at libs/generated/rust) ──────────
+kai-protos = { path = "../../libs/generated/rust" }
+
 # ── Async runtime ───────────────────────────────────────────────────────
 tokio = { version = "1.41", features = ["full"] }
 

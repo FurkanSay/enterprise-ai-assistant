@@ -11,6 +11,7 @@ name = "processing-server"
 path = "src/main.rs"
 
 [dependencies]
+kai-protos.workspace = true
 tokio.workspace = true
 axum.workspace = true
 tonic.workspace = true
