@@ -1,0 +1,85 @@
+-- AI Engine schema tables.
+-- Sessions, messages (the conversation log), and tool_invocations (audit).
+
+-- ─── sessions ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS aiengine_schema.sessions (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id           UUID NOT NULL REFERENCES identity_schema.tenants(id) ON DELETE RESTRICT,
+    user_id             UUID NOT NULL,  -- references identity_schema.users.id (no cross-schema FK)
+    title               TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    message_count       INT NOT NULL DEFAULT 0,
+    compaction_count    INT NOT NULL DEFAULT 0,
+    compaction_summary  TEXT,
+    last_heartbeat_at   TIMESTAMPTZ,
+    archived_at         TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_tenant_user ON aiengine_schema.sessions(tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_active ON aiengine_schema.sessions(tenant_id, archived_at)
+    WHERE archived_at IS NULL;
+
+ALTER TABLE aiengine_schema.sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aiengine_schema.sessions FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON aiengine_schema.sessions
+    USING (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid)
+    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid);
+
+-- ─── messages ───────────────────────────────────────────────────────────
+-- Append-only conversation log. `blocks` holds the ContentBlock array
+-- (text, thinking, tool_use, tool_result) as JSONB.
+CREATE TABLE IF NOT EXISTS aiengine_schema.messages (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id          UUID NOT NULL REFERENCES aiengine_schema.sessions(id) ON DELETE CASCADE,
+    tenant_id           UUID NOT NULL REFERENCES identity_schema.tenants(id) ON DELETE RESTRICT,
+    role                TEXT NOT NULL,  -- system | user | assistant | tool
+    blocks              JSONB NOT NULL,
+    token_usage         JSONB,
+    sequence_number     BIGINT NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (session_id, sequence_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_session ON aiengine_schema.messages(session_id, sequence_number);
+CREATE INDEX IF NOT EXISTS idx_messages_tenant ON aiengine_schema.messages(tenant_id);
+
+ALTER TABLE aiengine_schema.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aiengine_schema.messages FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON aiengine_schema.messages
+    USING (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid)
+    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid);
+
+-- ─── tool_invocations ───────────────────────────────────────────────────
+-- Audit log for every tool call. The PreToolUse hook writes the request,
+-- the PostToolUse hook updates with the output and duration.
+CREATE TABLE IF NOT EXISTS aiengine_schema.tool_invocations (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id          UUID NOT NULL REFERENCES aiengine_schema.sessions(id) ON DELETE CASCADE,
+    tenant_id           UUID NOT NULL REFERENCES identity_schema.tenants(id) ON DELETE RESTRICT,
+    user_id             UUID NOT NULL,
+    tool_name           TEXT NOT NULL,
+    tool_input_hash     TEXT NOT NULL,
+    tool_input          JSONB NOT NULL,
+    tool_output_hash    TEXT,
+    tool_output         TEXT,
+    is_error            BOOLEAN NOT NULL DEFAULT FALSE,
+    permission_mode     TEXT,
+    duration_ms         INT,
+    started_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at        TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_tools_session ON aiengine_schema.tool_invocations(session_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_tools_tenant ON aiengine_schema.tool_invocations(tenant_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_tools_name ON aiengine_schema.tool_invocations(tool_name);
+
+ALTER TABLE aiengine_schema.tool_invocations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aiengine_schema.tool_invocations FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON aiengine_schema.tool_invocations
+    USING (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid)
+    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid);
