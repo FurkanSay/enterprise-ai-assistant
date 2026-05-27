@@ -36,7 +36,14 @@ public class DocumentParser {
     /** What we store on the metadata row — a short preview only. */
     private static final int PREVIEW_CHARS = 4096;
 
-    public record ParsedDocument(String contentType, String previewText) { }
+    /**
+     * @param contentType  MIME type sniffed by Tika.
+     * @param previewText  First {@value #PREVIEW_CHARS} chars of body —
+     *                     useful for UI snippets.
+     * @param fullText     Full extracted body. Processing writes this to
+     *                     MinIO and the metadata row never carries it.
+     */
+    public record ParsedDocument(String contentType, String previewText, String fullText) { }
 
     public ParsedDocument parse(InputStream in, String filenameHint) {
         try {
@@ -54,7 +61,7 @@ public class DocumentParser {
                     ? body.substring(0, PREVIEW_CHARS)
                     : body;
             log.info("tika.parsed contentType={} bodyLength={}", contentType, body.length());
-            return new ParsedDocument(contentType, preview);
+            return new ParsedDocument(contentType, preview, body);
         } catch (IOException | SAXException | TikaException e) {
             throw new IllegalArgumentException("Tika failed to parse the upload: " + e.getMessage(), e);
         }

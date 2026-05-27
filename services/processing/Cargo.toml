@@ -22,6 +22,8 @@ kai-protos = { path = "../../libs/generated/rust" }
 
 # ── Async runtime ───────────────────────────────────────────────────────
 tokio = { version = "1.41", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
 
 # ── Web / gRPC ──────────────────────────────────────────────────────────
 axum = "0.7"
@@ -52,6 +54,21 @@ rayon = "1.10"
 unicode-segmentation = "1.12"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 redis = { version = "0.27", features = ["tokio-comp", "streams"] }
+
+# ── Phase E additions ───────────────────────────────────────────────────
+# fastembed-rs uses ONNX Runtime under the hood (via `ort`). ORT only
+# supports glibc Linux out of the box — see processing/Dockerfile for the
+# runtime base switch this dependency forced.
+fastembed = "4.4"
+# Qdrant gRPC client.
+qdrant-client = "1.12"
+# S3 client for MinIO downloads (MinIO speaks S3, so we use the AWS SDK).
+aws-sdk-s3 = "1.62"
+aws-config = "1.5"
+aws-credential-types = "1.2"
+# Async Postgres driver — we set app.current_tenant_id per transaction.
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "macros"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 [profile.release]
 opt-level = 3

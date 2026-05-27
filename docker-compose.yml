@@ -196,10 +196,32 @@ services:
       - "8083:8083"
     environment:
       REDIS_URL: redis://redis:6379
+      STREAM_KEY: doc.uploaded.v1
+      CONSUMER_GROUP: processing
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-kai_admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-kai_minio_pwd}
+      MINIO_BUCKET: documents
+      QDRANT_URL: http://qdrant:6334
+      QDRANT_COLLECTION: documents
+      # Connects as documents_user — same role Documents uses, same RLS rules.
+      # That lets Processing update document status without a service-to-service
+      # call back into Documents.
+      DATABASE_URL: postgres://${DOCUMENTS_DB_USER:-documents_user}:${DOCUMENTS_DB_PASSWORD:-documents_dev_pwd}@postgres:5432/${POSTGRES_DB:-kai}
+      BM25_INDEX_PATH: /var/lib/processing/index
+      FASTEMBED_CACHE_DIR: /var/lib/processing/models
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      RUST_LOG: ${RUST_LOG:-info}
+      RUST_LOG: ${RUST_LOG:-info,processing_server=debug}
+    volumes:
+      - processing_data:/var/lib/processing
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
 
   aiengine:
@@ -264,6 +286,9 @@ volumes:
   minio_data:
   qdrant_data:
   grafana_data:
+  # Holds the tantivy index AND the fastembed model cache so a container
+  # restart does not re-download the 100MB+ ONNX file.
+  processing_data:
 
 networks:
   default:

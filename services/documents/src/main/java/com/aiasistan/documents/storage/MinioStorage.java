@@ -39,6 +39,14 @@ public class MinioStorage {
     }
 
     /**
+     * Companion key for the Tika-extracted plain text. Processing reads this
+     * instead of re-parsing the binary, so the parser only runs once.
+     */
+    public String buildTextObjectKey(UUID tenantId, UUID documentId) {
+        return tenantId + "/" + documentId + "/text.txt";
+    }
+
+    /**
      * Stream upload — no in-memory buffer, suitable for 100 MB+ files.
      */
     public void upload(String objectKey, InputStream stream, long size, String contentType)

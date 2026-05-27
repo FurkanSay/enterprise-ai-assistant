@@ -4,19 +4,34 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "gRPC + Redis consumer server: chunking + BM25 indexing"
+description = "Phase E processor: Redis consumer + chunker + embedder + dual-index"
 
 [[bin]]
 name = "processing-server"
 path = "src/main.rs"
 
-# Phase B5 minimal — only what main.rs uses today. The full surface
-# (kai-protos for gRPC, tonic, redis consumer, OpenTelemetry pipeline)
-# comes back in Phase E.
 [dependencies]
+# Workspace
 tokio.workspace = true
+async-trait.workspace = true
+futures.workspace = true
 axum.workspace = true
 anyhow.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+uuid.workspace = true
+redis.workspace = true
+fastembed.workspace = true
+qdrant-client.workspace = true
+aws-sdk-s3.workspace = true
+aws-config.workspace = true
+aws-credential-types.workspace = true
+sqlx.workspace = true
+chrono.workspace = true
+
+# Local crates
+chunker = { path = "../chunker" }
+bm25-index = { path = "../bm25-index" }

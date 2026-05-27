@@ -85,6 +85,7 @@ public class DocumentService {
 
         UUID documentId = UUID.randomUUID();
         String objectKey = storage.buildObjectKey(tenantId, documentId, defaultFilename(file));
+        String textObjectKey = storage.buildTextObjectKey(tenantId, documentId);
 
         try {
             storage.upload(
@@ -92,6 +93,14 @@ public class DocumentService {
                     new java.io.ByteArrayInputStream(bytes),
                     bytes.length,
                     parsed.contentType());
+            // Companion plain-text object — Processing reads this instead of
+            // re-parsing the binary. Tika runs exactly once per document.
+            byte[] textBytes = parsed.fullText().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            storage.upload(
+                    textObjectKey,
+                    new java.io.ByteArrayInputStream(textBytes),
+                    textBytes.length,
+                    "text/plain; charset=utf-8");
         } catch (Exception e) {
             throw new IllegalStateException("MinIO upload failed: " + e.getMessage(), e);
         }
@@ -108,7 +117,7 @@ public class DocumentService {
                 objectKey);
 
         Document saved = repository.save(doc);
-        events.publishUploaded(saved);
+        events.publishUploaded(saved, textObjectKey);
         log.info("upload.ok document_id={} bytes={} mime={}",
                 saved.getId(), saved.getSizeBytes(), saved.getMimeType());
         return saved;
