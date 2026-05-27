@@ -102,11 +102,32 @@ impl Pipeline {
             "pipeline.text.downloaded"
         );
 
-        // 2. CHUNKING — pure CPU, no awaits.
+        // 2. CHUNKING — pure CPU. Run inside spawn_blocking with a
+        // catch_unwind guard so a panic on weird input (we shipped a
+        // UTF-8 boundary bug once already) surfaces as a normal error
+        // and only fails THIS document. Without the guard a single bad
+        // doc kills the consumer task and the queue freezes.
         self.db
             .mark_status(event.tenant_id, event.document_id, "CHUNKING")
             .await?;
-        let chunks = chunk_text(&text, ChunkConfig::default());
+        let text_for_chunk = text.clone();
+        let chunks = tokio::task::spawn_blocking(move || {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                chunk_text(&text_for_chunk, ChunkConfig::default())
+            }))
+        })
+        .await
+        .context("chunker join")?
+        .map_err(|panic| {
+            let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                (*s).to_string()
+            } else if let Some(s) = panic.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "chunker panicked with non-string payload".to_string()
+            };
+            anyhow::anyhow!("chunker panicked: {msg}")
+        })?;
         if chunks.is_empty() {
             anyhow::bail!("chunker produced no chunks — empty or unreadable text");
         }

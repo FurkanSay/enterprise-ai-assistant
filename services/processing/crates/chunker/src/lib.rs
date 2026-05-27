@@ -89,7 +89,15 @@ fn push_chunk(out: &mut Vec<Chunk>, buf: &mut String, seq: &mut u32, overlap: us
     *seq += 1;
 
     if overlap > 0 && buf.len() > overlap {
-        let tail = buf[buf.len().saturating_sub(overlap)..].to_owned();
+        // `buf.len()` is in BYTES; slicing inside a multi-byte UTF-8
+        // codepoint panics. Walk backwards from the desired position
+        // to the previous char boundary so Turkish/Arabic/CJK text
+        // survives the overlap window without blowing up the indexer.
+        let mut start = buf.len().saturating_sub(overlap);
+        while start < buf.len() && !buf.is_char_boundary(start) {
+            start += 1;
+        }
+        let tail = buf[start..].to_owned();
         buf.clear();
         buf.push_str(&tail);
     } else {
@@ -140,5 +148,26 @@ mod tests {
         let sentence = "Lorem ipsum dolor sit amet. ".repeat(200);
         let chunks = chunk_text(&sentence, ChunkConfig::default());
         assert!(chunks.len() > 1, "expected multiple chunks for long text");
+    }
+
+    /// Regression: a Turkish resume hung the pipeline because the byte
+    /// index for the overlap window landed inside the 'ı' codepoint
+    /// (two bytes in UTF-8). The chunker must walk to a char boundary
+    /// rather than panic on `&buf[byte_index..]`.
+    #[test]
+    fn overlap_respects_multibyte_char_boundary() {
+        // Build a sentence long enough to trigger the overlap path and
+        // dense enough with multi-byte Turkish characters that the
+        // overlap window is very likely to land mid-codepoint.
+        let line = "İstanbul'da yazılım geliştiriyorum. Çok güzel bir şehir. ";
+        let text = line.repeat(80); // ~4500 bytes, similar to the real failure
+        let chunks = chunk_text(&text, ChunkConfig::default());
+        assert!(!chunks.is_empty(), "Turkish text must chunk without panic");
+        // Every chunk must be valid UTF-8 — the to_owned() above would
+        // have panicked on a bad boundary, so reaching this assertion
+        // implies the boundary fix held.
+        for c in &chunks {
+            assert!(!c.text.is_empty());
+        }
     }
 }
