@@ -30,6 +30,11 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  // Live chain-of-thought from reasoning models (Nemotron, DeepSeek-R1).
+  // Rendered in a separate "düşünüyor" panel while the LLM cogitates
+  // BEFORE producing visible text — without this, large prompts looked
+  // like "no streaming" because the visible token stream lagged 20-40s.
+  const [thinking, setThinking] = useState<string>('');
   // Bumped after every assistant reply so the sidebar re-fetches.
   const [sidebarVersion, setSidebarVersion] = useState(0);
 
@@ -75,8 +80,10 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { role: 'user', text }]);
     setIsStreaming(true);
     setError(null);
+    setThinking('');
 
     let assistantBuffer = '';
+    let thinkingBuffer = '';
     setMessages((prev) => [...prev, { role: 'assistant', text: '' }]);
 
     let createdNew = sessionId === undefined;
@@ -86,7 +93,15 @@ export default function ChatPage() {
         if (event.event === 'session' && typeof event.data.id === 'string') {
           setSessionId(event.data.id);
           createdNew = true;
+        } else if (event.event === 'thinking') {
+          thinkingBuffer += event.data.text ?? '';
+          setThinking(thinkingBuffer);
         } else if (event.event === 'token') {
+          // First real content delta — drop the thinking panel.
+          if (thinkingBuffer) {
+            thinkingBuffer = '';
+            setThinking('');
+          }
           assistantBuffer += event.data.text ?? '';
           setMessages((prev) => {
             const next = [...prev];
@@ -104,6 +119,7 @@ export default function ChatPage() {
       setMessages((prev) => prev.slice(0, -1));
     } finally {
       setIsStreaming(false);
+      setThinking('');
       // Refresh sidebar after every assistant reply — new sessions appear,
       // existing ones move up due to updated_at.
       if (createdNew || sessionId) {
@@ -192,7 +208,7 @@ export default function ChatPage() {
             {error}
           </div>
         )}
-        <ChatMessages messages={messages} />
+        <ChatMessages messages={messages} thinking={thinking} />
         <ChatInput onSend={handleSend} disabled={isStreaming} />
       </main>
     </div>

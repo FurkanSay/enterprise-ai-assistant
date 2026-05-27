@@ -192,6 +192,18 @@ async def stream_completion(
             choice = choices[0]
             delta = getattr(choice, "delta", None)
             if delta is not None:
+                # Reasoning models (Nemotron-3, DeepSeek-R1, …) emit their
+                # chain-of-thought in `reasoning_content` BEFORE any actual
+                # answer lands on `content`. If we only watch `content`,
+                # the user sees a long silence followed by a burst — which
+                # looks like "no streaming". Stream the reasoning as a
+                # distinct `thinking` event so the UI can show "düşünüyor…"
+                # while the model is mid-cogitation.
+                reasoning_piece = getattr(delta, "reasoning_content", None) or getattr(
+                    delta, "reasoning", None
+                )
+                if reasoning_piece:
+                    yield StreamChunk("thinking", {"text": reasoning_piece})
                 text_piece = getattr(delta, "content", None)
                 if text_piece:
                     yield StreamChunk("text_delta", {"text": text_piece})

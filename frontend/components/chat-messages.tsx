@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
 import { AttachmentPreview } from './attachment-preview';
@@ -9,6 +9,15 @@ import { AttachmentPreview } from './attachment-preview';
 export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
+}
+
+interface Props {
+  messages: ChatMessage[];
+  /** Live chain-of-thought from the reasoning model. Empty string = no
+   *  thinking in progress. When non-empty, we render a collapsed panel
+   *  above the next assistant bubble so the user can see the model is
+   *  working rather than staring at silence. */
+  thinking?: string;
 }
 
 interface Part {
@@ -49,10 +58,11 @@ function firstLine(text: string): string {
   return 'Yapıştırılan metin';
 }
 
-export function ChatMessages({ messages }: { messages: ChatMessage[] }) {
+export function ChatMessages({ messages, thinking = '' }: Props) {
   const [previewText, setPreviewText] = useState<string | null>(null);
+  const [showThinking, setShowThinking] = useState(false);
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && !thinking) {
     return (
       <div className="flex flex-1 items-center justify-center text-neutral-400">
         Soru sorarak başlayın. Yüklediğiniz dokümanlardan cevap verir.
@@ -110,6 +120,27 @@ export function ChatMessages({ messages }: { messages: ChatMessage[] }) {
             </div>
           );
         })}
+        {thinking && (
+          <div className="mr-auto max-w-[80%]">
+            <button
+              type="button"
+              onClick={() => setShowThinking((v) => !v)}
+              className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800"
+            >
+              <Loader2 size={14} className="animate-spin" />
+              <span className="font-medium">Düşünüyor…</span>
+              <span className="opacity-60">
+                ({thinking.length.toLocaleString('tr-TR')} karakter
+                {showThinking ? ' · gizle' : ' · göster'})
+              </span>
+            </button>
+            {showThinking && (
+              <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs italic text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
+                {thinking}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
       {previewText !== null && (
         <AttachmentPreview

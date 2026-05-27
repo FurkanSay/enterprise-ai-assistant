@@ -140,6 +140,11 @@ async def run_turn(
                     text = chunk.data.get("text", "")
                     assistant_text_parts.append(text)
                     yield AgentEvent("token", {"text": text})
+                elif chunk.kind == "thinking":
+                    # Reasoning-model chain-of-thought. We do NOT persist
+                    # this — it's transient UX, not durable history. The
+                    # SSE event lets the UI render a "düşünüyor…" panel.
+                    yield AgentEvent("thinking", chunk.data)
                 elif chunk.kind == "tool_use":
                     yield AgentEvent("tool_use", chunk.data)
                     pending_tool_uses.append(

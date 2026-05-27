@@ -21,6 +21,7 @@ export class UnauthenticatedError extends Error {
 export interface ChatStreamEvent {
   event:
     | 'token'
+    | 'thinking'
     | 'tool_use'
     | 'tool_result'
     | 'usage'
