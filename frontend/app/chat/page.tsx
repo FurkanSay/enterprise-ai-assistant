@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -75,6 +75,44 @@ export default function ChatPage() {
     setError(null);
   }, []);
 
+  // Pseudo-streaming buffer.
+  // Some providers (Nemotron-3 free tier, certain OpenRouter routes)
+  // batch the entire response into one or two large chunks instead of
+  // sending real per-token deltas — the user sees no visible typing,
+  // just a sudden wall of text after a long pause. This buffer + tick
+  // approach decouples the display rate from the server's chunk rate:
+  // characters drain at a fixed cadence regardless of how the bytes
+  // arrive. When the stream is truly token-by-token (small models),
+  // the buffer stays near-empty and the cadence is invisible.
+  const pendingRef = useRef<string>('');
+  const renderedRef = useRef<string>('');
+  const tickHandleRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function startTypewriter() {
+    if (tickHandleRef.current) return;
+    // 35 chars / 25ms ≈ 1400 chars/sec — fast enough to feel responsive
+    // on long answers, slow enough to register as "typing" to the eye.
+    tickHandleRef.current = setInterval(() => {
+      if (pendingRef.current.length === 0) return;
+      const chunk = pendingRef.current.slice(0, 35);
+      pendingRef.current = pendingRef.current.slice(35);
+      renderedRef.current += chunk;
+      const rendered = renderedRef.current;
+      setMessages((prev) => {
+        const next = [...prev];
+        next[next.length - 1] = { role: 'assistant', text: rendered };
+        return next;
+      });
+    }, 25);
+  }
+
+  function stopTypewriter() {
+    if (tickHandleRef.current) {
+      clearInterval(tickHandleRef.current);
+      tickHandleRef.current = null;
+    }
+  }
+
   async function handleSend(text: string) {
     if (!text.trim() || isStreaming) return;
     setMessages((prev) => [...prev, { role: 'user', text }]);
@@ -82,9 +120,11 @@ export default function ChatPage() {
     setError(null);
     setThinking('');
 
-    let assistantBuffer = '';
     let thinkingBuffer = '';
+    pendingRef.current = '';
+    renderedRef.current = '';
     setMessages((prev) => [...prev, { role: 'assistant', text: '' }]);
+    startTypewriter();
 
     let createdNew = sessionId === undefined;
 
@@ -102,13 +142,13 @@ export default function ChatPage() {
             thinkingBuffer = '';
             setThinking('');
           }
-          assistantBuffer += event.data.text ?? '';
-          setMessages((prev) => {
-            const next = [...prev];
-            next[next.length - 1] = { role: 'assistant', text: assistantBuffer };
-            return next;
-          });
+          // Queue, do NOT flush immediately. The typewriter drains it.
+          pendingRef.current += event.data.text ?? '';
         }
+      }
+      // Drain whatever is left at full speed.
+      while (pendingRef.current.length > 0) {
+        await new Promise((r) => setTimeout(r, 20));
       }
     } catch (e) {
       if (e instanceof UnauthenticatedError) {
@@ -118,6 +158,19 @@ export default function ChatPage() {
       setError(e instanceof Error ? e.message : 'Bilinmeyen hata');
       setMessages((prev) => prev.slice(0, -1));
     } finally {
+      stopTypewriter();
+      // Final flush in case some chars sat between the last tick and
+      // the loop exit.
+      if (pendingRef.current.length > 0) {
+        renderedRef.current += pendingRef.current;
+        pendingRef.current = '';
+        const finalText = renderedRef.current;
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = { role: 'assistant', text: finalText };
+          return next;
+        });
+      }
       setIsStreaming(false);
       setThinking('');
       // Refresh sidebar after every assistant reply — new sessions appear,
@@ -127,6 +180,11 @@ export default function ChatPage() {
       }
     }
   }
+
+  // Stop the typewriter on unmount to avoid stale timers.
+  useEffect(() => {
+    return () => stopTypewriter();
+  }, []);
 
   async function handleFork() {
     if (!sessionId || isStreaming) return;
