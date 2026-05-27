@@ -76,6 +76,17 @@ public class Document implements Persistable<UUID> {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    // Phase L: lineage for documents ingested via the Deep Search flow.
+    // NULL for documents uploaded the normal way through the UI.
+    @Column(name = "source_session_id")
+    private UUID sourceSessionId;
+
+    @Column(name = "source_paper_doi")
+    private String sourcePaperDoi;
+
+    @Column(name = "source_paper_title")
+    private String sourcePaperTitle;
+
     /**
      * Persistable.isNew() — we assign ids manually, so without this flag
      * Spring Data would call merge() (with a wasteful SELECT) instead of
@@ -112,7 +123,10 @@ public class Document implements Persistable<UUID> {
             String mimeType,
             long sizeBytes,
             String sha256,
-            String minioObjectKey) {
+            String minioObjectKey,
+            UUID sourceSessionId,
+            String sourcePaperDoi,
+            String sourcePaperTitle) {
         Document doc = new Document();
         doc.id = id;
         doc.tenantId = tenantId;
@@ -125,6 +139,9 @@ public class Document implements Persistable<UUID> {
         doc.minioObjectKey = minioObjectKey;
         doc.status = DocumentStatus.UPLOADED;
         doc.chunkCount = 0;
+        doc.sourceSessionId = sourceSessionId;
+        doc.sourcePaperDoi = sourcePaperDoi;
+        doc.sourcePaperTitle = sourcePaperTitle;
         doc.createdAt = Instant.now();
         doc.updatedAt = doc.createdAt;
         return doc;
@@ -152,4 +169,7 @@ public class Document implements Persistable<UUID> {
     public String getFailureReason() { return failureReason; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public UUID getSourceSessionId() { return sourceSessionId; }
+    public String getSourcePaperDoi() { return sourcePaperDoi; }
+    public String getSourcePaperTitle() { return sourcePaperTitle; }
 }

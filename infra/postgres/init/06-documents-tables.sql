@@ -23,6 +23,15 @@ CREATE INDEX IF NOT EXISTS idx_documents_tenant ON documents_schema.documents(te
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents_schema.documents(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_documents_sha256 ON documents_schema.documents(tenant_id, sha256);
 
+-- Phase L: lineage for papers ingested via Deep Search. NULL on
+-- documents uploaded the normal way through the /documents UI.
+ALTER TABLE documents_schema.documents ADD COLUMN IF NOT EXISTS source_session_id UUID;
+ALTER TABLE documents_schema.documents ADD COLUMN IF NOT EXISTS source_paper_doi TEXT;
+ALTER TABLE documents_schema.documents ADD COLUMN IF NOT EXISTS source_paper_title TEXT;
+CREATE INDEX IF NOT EXISTS idx_documents_source_session
+    ON documents_schema.documents(tenant_id, source_session_id)
+    WHERE source_session_id IS NOT NULL;
+
 ALTER TABLE documents_schema.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents_schema.documents FORCE ROW LEVEL SECURITY;
 

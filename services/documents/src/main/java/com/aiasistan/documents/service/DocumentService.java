@@ -64,8 +64,19 @@ public class DocumentService {
         this.events = events;
     }
 
+    public record LiteratureSource(UUID sessionId, String paperDoi, String paperTitle) {
+        public static LiteratureSource none() {
+            return new LiteratureSource(null, null, null);
+        }
+    }
+
     @Transactional
     public Document upload(MultipartFile file, String title) {
+        return upload(file, title, LiteratureSource.none());
+    }
+
+    @Transactional
+    public Document upload(MultipartFile file, String title, LiteratureSource source) {
         TenantContext.Current ctx = TenantContext.require();
         UUID tenantId = ctx.tenantId();
         UUID userId = ctx.userId();
@@ -114,7 +125,10 @@ public class DocumentService {
                 parsed.contentType() != null ? parsed.contentType() : file.getContentType(),
                 bytes.length,
                 sha256,
-                objectKey);
+                objectKey,
+                source.sessionId(),
+                source.paperDoi(),
+                source.paperTitle());
 
         Document saved = repository.save(doc);
         events.publishUploaded(saved, textObjectKey);
@@ -126,6 +140,12 @@ public class DocumentService {
     @Transactional(readOnly = true)
     public Page<Document> list(int page, int size) {
         return repository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Document> listForSession(UUID sessionId, int page, int size) {
+        return repository.findAllBySourceSessionIdOrderByCreatedAtDesc(
+                sessionId, PageRequest.of(page, size));
     }
 
     @Transactional(readOnly = true)

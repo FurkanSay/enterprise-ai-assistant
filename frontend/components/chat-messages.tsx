@@ -23,17 +23,8 @@ export interface ChatMessage {
 
 interface Props {
   messages: ChatMessage[];
-  /** Live chain-of-thought from the reasoning model. Empty string = no
-   *  thinking in progress. When non-empty, we render a collapsed panel
-   *  above the next assistant bubble so the user can see the model is
-   *  working rather than staring at silence. */
+  /** Live chain-of-thought from the reasoning model. */
   thinking?: string;
-  /** Callback when the user clicks "RAG'e ekle" on a paper card. The
-   *  chat page composes a follow-up message that nudges the model to
-   *  call its `ingest_paper` tool. */
-  onIngestPaper?: (paper: Paper) => void;
-  /** Per-paper ingest status, keyed by DOI / arXiv id / source_id. */
-  ingestStatus?: Record<string, 'idle' | 'pending' | 'done' | 'error'>;
 }
 
 function paperKey(p: Paper): string {
@@ -78,12 +69,7 @@ function firstLine(text: string): string {
   return 'Yapıştırılan metin';
 }
 
-export function ChatMessages({
-  messages,
-  thinking = '',
-  onIngestPaper,
-  ingestStatus,
-}: Props) {
+export function ChatMessages({ messages, thinking = '' }: Props) {
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [showThinking, setShowThinking] = useState(false);
 
@@ -155,14 +141,7 @@ export function ChatMessages({
                       </div>
                       <div className="grid gap-2">
                         {papers.map((paper) => (
-                          <PaperCard
-                            key={paperKey(paper)}
-                            paper={paper}
-                            onIngest={(p) => onIngestPaper?.(p)}
-                            ingestStatus={
-                              ingestStatus?.[paperKey(paper)] ?? 'idle'
-                            }
-                          />
+                          <PaperCard key={paperKey(paper)} paper={paper} />
                         ))}
                       </div>
                     </div>

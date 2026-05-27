@@ -20,4 +20,7 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
     Optional<Document> findBySha256(String sha256);
 
     Page<Document> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    Page<Document> findAllBySourceSessionIdOrderByCreatedAtDesc(
+            UUID sourceSessionId, Pageable pageable);
 }

@@ -9,7 +9,6 @@ import { GitBranch } from 'lucide-react';
 import { ChatMessages, type ChatMessage } from '@/components/chat-messages';
 import { ChatInput } from '@/components/chat-input';
 import { SessionSidebar } from '@/components/session-sidebar';
-import type { Paper } from '@/components/paper-card';
 import {
   forkSession,
   getSession,
@@ -39,10 +38,6 @@ export default function ChatPage() {
   const [thinking, setThinking] = useState<string>('');
   // Bumped after every assistant reply so the sidebar re-fetches.
   const [sidebarVersion, setSidebarVersion] = useState(0);
-  // Per-paper ingest status, keyed by paperKey (doi || arxiv_id || source_id).
-  const [ingestStatus, setIngestStatus] = useState<
-    Record<string, 'idle' | 'pending' | 'done' | 'error'>
-  >({});
 
   // Client-side route guard. Middleware can't see localStorage.
   useEffect(() => {
@@ -85,24 +80,6 @@ export default function ChatPage() {
     setError(null);
     setMode('normal');
   }, []);
-
-  function paperKey(p: Paper): string {
-    return p.doi || p.arxiv_id || p.source_id;
-  }
-
-  function handleIngestPaper(paper: Paper) {
-    const key = paperKey(paper);
-    if (ingestStatus[key] === 'pending' || ingestStatus[key] === 'done') return;
-    setIngestStatus((prev) => ({ ...prev, [key]: 'pending' }));
-    // Compose a deterministic follow-up turn that the model resolves
-    // into an `ingest_paper` tool call. We pass the full Paper record
-    // as inline JSON so the model has everything it needs (no extra
-    // round-trip), and prefix with a clear instruction.
-    const payload = JSON.stringify(paper);
-    handleSend(
-      `Lütfen şu makaleyi RAG koleksiyonuma ekle (ingest_paper):\n${payload}`,
-    );
-  }
 
   function handleToggleDeepSearch() {
     // Mode change always starts a fresh session so the toolset +
@@ -147,7 +124,13 @@ export default function ChatPage() {
       const rendered = renderedRef.current;
       setMessages((prev) => {
         const next = [...prev];
-        next[next.length - 1] = { role: 'assistant', text: rendered };
+        const last = next[next.length - 1];
+        if (!last) return prev;
+        // Preserve toolResults / any other future fields. The earlier
+        // shorthand `{role, text}` rewrite was wiping the paper-list
+        // cards added by the tool_result handler the moment the first
+        // text token landed.
+        next[next.length - 1] = { ...last, text: rendered };
         return next;
       });
     }, 25);
@@ -211,13 +194,6 @@ export default function ChatPage() {
                 }
                 return next;
               });
-              if (payload.ui_kind === 'paper_ingested') {
-                const k =
-                  payload.doi || payload.arxiv_id || payload.source_id || '';
-                if (k) {
-                  setIngestStatus((prev) => ({ ...prev, [k]: 'done' }));
-                }
-              }
             }
           }
         } else if (event.event === 'thinking') {
@@ -254,7 +230,9 @@ export default function ChatPage() {
         const finalText = renderedRef.current;
         setMessages((prev) => {
           const next = [...prev];
-          next[next.length - 1] = { role: 'assistant', text: finalText };
+          const last = next[next.length - 1];
+          if (!last) return prev;
+          next[next.length - 1] = { ...last, text: finalText };
           return next;
         });
       }
@@ -360,12 +338,7 @@ export default function ChatPage() {
             {error}
           </div>
         )}
-        <ChatMessages
-          messages={messages}
-          thinking={thinking}
-          onIngestPaper={handleIngestPaper}
-          ingestStatus={ingestStatus}
-        />
+        <ChatMessages messages={messages} thinking={thinking} />
         <ChatInput
           onSend={handleSend}
           disabled={isStreaming}

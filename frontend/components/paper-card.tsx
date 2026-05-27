@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BookOpen, Download, ExternalLink, Loader2 } from 'lucide-react';
+import { BookOpen, Check, Download, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
 
 export interface Paper {
@@ -19,22 +19,18 @@ export interface Paper {
   landing_url?: string | null;
 }
 
-/** Per-paper render used inside the Deep Search tool_result block.
- *  Clicking "RAG'e ekle" hands control back to the chat page, which
- *  fires a follow-up user turn that the model resolves into an
- *  `ingest_paper` tool call. We avoid wiring the tool API directly
- *  from this component so all RAG-modifying actions still flow
- *  through the agent loop (auth + audit + permissions stay uniform). */
-export function PaperCard({
-  paper,
-  onIngest,
-  ingestStatus,
-}: {
-  paper: Paper;
-  onIngest: (paper: Paper) => void;
-  /** 'idle' | 'pending' | 'done' | 'error' — controlled by parent. */
-  ingestStatus?: 'idle' | 'pending' | 'done' | 'error';
-}) {
+/** Render of one paper inside a Deep Search result block.
+ *
+ *  Phase L now auto-ingests every result on the backend side, so the
+ *  card no longer carries an "Add to RAG" button — the entire result
+ *  set is queued for ingestion the moment literature_search returns.
+ *  The card surfaces:
+ *    - Title, authors, year, venue, citations
+ *    - Abstract preview (collapsible)
+ *    - Open-access PDF link if available
+ *    - DOI link
+ *    - An "auto-ingest" indicator so the user knows what is happening */
+export function PaperCard({ paper }: { paper: Paper }) {
   const [expanded, setExpanded] = useState(false);
   const authorsLine =
     paper.authors && paper.authors.length > 0
@@ -45,7 +41,6 @@ export function PaperCard({
   const abstract = paper.abstract ?? '';
   const showExpand = abstract.length > 220;
   const visible = expanded || !showExpand ? abstract : abstract.slice(0, 220) + '…';
-  const status = ingestStatus ?? 'idle';
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900">
@@ -84,30 +79,31 @@ export function PaperCard({
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onIngest(paper)}
-          disabled={status === 'pending' || status === 'done'}
+        <span
           className={clsx(
-            'flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-60',
-            status === 'done'
+            'flex items-center gap-1 rounded-md border px-2 py-1 text-[11px]',
+            paper.oa_pdf_url || paper.arxiv_id
               ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-              : 'border-purple-300 bg-purple-50 text-purple-800 hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950 dark:text-purple-300 dark:hover:bg-purple-900',
+              : 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300',
           )}
+          title={
+            paper.oa_pdf_url || paper.arxiv_id
+              ? 'PDF arka planda indirilip RAG koleksiyonuna ekleniyor'
+              : 'PDF açık erişim değil — abstract metadata olarak ekleniyor'
+          }
         >
-          {status === 'pending' ? (
-            <Loader2 size={12} className="animate-spin" />
+          {paper.oa_pdf_url || paper.arxiv_id ? (
+            <>
+              <Download size={12} />
+              Otomatik RAG&apos;e ekleniyor
+            </>
           ) : (
-            <Download size={12} />
+            <>
+              <Check size={12} />
+              Abstract eklenecek (PDF yok)
+            </>
           )}
-          {status === 'done'
-            ? 'RAG\'e eklendi'
-            : status === 'pending'
-              ? 'Ekleniyor…'
-              : status === 'error'
-                ? 'Tekrar dene'
-                : "RAG'e ekle"}
-        </button>
+        </span>
         {paper.oa_pdf_url && (
           <a
             href={paper.oa_pdf_url}

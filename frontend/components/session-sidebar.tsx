@@ -63,6 +63,19 @@ export function SessionSidebar({
   // immediately, before the server round-trip completes.
   const deletingRef = useRef<Set<string>>(new Set());
 
+  // Pin the unauth callback to a ref so the fetch effect's deps don't
+  // churn on every parent render. Without this, the chat page's
+  // typewriter (which updates message state ~40×/sec while streaming)
+  // gave SessionSidebar a fresh `onUnauthenticated` prop each render,
+  // which invalidated the useCallback, which fired the useEffect,
+  // which hammered /api/v1/sessions until Gateway's rate limiter
+  // (120/min/tenant) returned 429 and the browser console filled with
+  // ERR_ABORTED 429 (Too Many Requests).
+  const onUnauthRef = useRef(onUnauthenticated);
+  useEffect(() => {
+    onUnauthRef.current = onUnauthenticated;
+  }, [onUnauthenticated]);
+
   const refresh = useCallback(async () => {
     setError(null);
     try {
@@ -70,15 +83,17 @@ export function SessionSidebar({
       setSessions(items);
     } catch (e) {
       if (e instanceof UnauthenticatedError) {
-        onUnauthenticated();
+        onUnauthRef.current();
         return;
       }
       setError(e instanceof Error ? e.message : 'Bilinmeyen hata');
     } finally {
       setLoading(false);
     }
-  }, [onUnauthenticated]);
+  }, []);
 
+  // Only refire when the parent explicitly bumps refreshKey, not on
+  // every render. `refresh` is now stable (empty deps).
   useEffect(() => {
     refresh();
   }, [refresh, refreshKey]);

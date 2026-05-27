@@ -85,7 +85,10 @@ def _build_abstract_doc(paper: Paper) -> bytes:
 
 
 async def ingest(
-    tenant: TenantContext, paper: Paper
+    tenant: TenantContext,
+    paper: Paper,
+    *,
+    source_session_id: str | None = None,
 ) -> dict[str, str]:
     """Push the paper through the Documents pipeline.
 
@@ -137,7 +140,12 @@ async def ingest(
         files = {
             "file": (file_name, io.BytesIO(file_bytes), mime),
         }
-        data = {"title": title}
+        data: dict[str, str] = {"title": title}
+        if source_session_id:
+            data["source_session_id"] = source_session_id
+            if paper.doi:
+                data["source_paper_doi"] = paper.doi
+            data["source_paper_title"] = paper.title
         upload_resp = await client.post(
             f"{settings.documents_http_url}/api/v1/documents",
             headers=headers,

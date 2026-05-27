@@ -47,20 +47,29 @@ public class DocumentController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentResponse> upload(
             @RequestPart("file") MultipartFile file,
-            @RequestParam(value = "title", required = false) String title) {
+            @RequestParam(value = "title", required = false) String title,
+            @RequestParam(value = "source_session_id", required = false) UUID sourceSessionId,
+            @RequestParam(value = "source_paper_doi", required = false) String sourcePaperDoi,
+            @RequestParam(value = "source_paper_title", required = false) String sourcePaperTitle) {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("file part is empty");
         }
-        Document saved = service.upload(file, title);
-        log.info("api.upload.ok document_id={} bytes={}", saved.getId(), saved.getSizeBytes());
+        var source = new com.aiasistan.documents.service.DocumentService.LiteratureSource(
+                sourceSessionId, sourcePaperDoi, sourcePaperTitle);
+        Document saved = service.upload(file, title, source);
+        log.info("api.upload.ok document_id={} bytes={} source_session={}",
+                saved.getId(), saved.getSizeBytes(), sourceSessionId);
         return ResponseEntity.status(HttpStatus.CREATED).body(DocumentResponse.from(saved));
     }
 
     @GetMapping
     public Map<String, Object> list(
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size) {
-        Page<Document> p = service.list(page, Math.min(size, 100));
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "source_session_id", required = false) UUID sourceSessionId) {
+        Page<Document> p = sourceSessionId != null
+                ? service.listForSession(sourceSessionId, page, Math.min(size, 100))
+                : service.list(page, Math.min(size, 100));
         List<DocumentResponse> items = p.getContent().stream()
                 .map(DocumentResponse::from)
                 .toList();
