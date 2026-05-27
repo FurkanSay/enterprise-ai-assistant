@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
 
+import { Trash2 } from 'lucide-react';
+
 import {
+  deleteDocument,
   listDocuments,
   uploadDocument,
   UnauthenticatedError,
@@ -91,6 +94,31 @@ export default function DocumentsPage() {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
   }, [user, refresh]);
+
+  async function handleDelete(id: string, title: string) {
+    const ok = window.confirm(
+      `"${title}" silinsin mi? Bu işlem geri alınamaz.`,
+    );
+    if (!ok) return;
+    // Optimistic removal — full reconcile happens via refresh below if
+    // the request actually failed.
+    const previous = docsRef.current;
+    const next = previous.filter((d) => d.id !== id);
+    docsRef.current = next;
+    setDocs(next);
+    try {
+      await deleteDocument(id);
+    } catch (e) {
+      if (e instanceof UnauthenticatedError) {
+        router.replace('/login');
+        return;
+      }
+      // Rollback.
+      docsRef.current = previous;
+      setDocs(previous);
+      setError(e instanceof Error ? e.message : 'Silme başarısız');
+    }
+  }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -180,9 +208,9 @@ export default function DocumentsPage() {
         {docs.map((doc) => (
           <li
             key={doc.id}
-            className="flex items-center justify-between px-6 py-3 text-sm"
+            className="flex items-center justify-between gap-3 px-6 py-3 text-sm"
           >
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{doc.title}</p>
               <p className="truncate text-xs text-neutral-500">
                 {doc.originalFilename} · {formatBytes(doc.sizeBytes)} ·{' '}
@@ -197,6 +225,15 @@ export default function DocumentsPage() {
             >
               {doc.status}
             </span>
+            <button
+              type="button"
+              onClick={() => handleDelete(doc.id, doc.title)}
+              title="Dokümanı sil"
+              aria-label={`${doc.title} adlı dokümanı sil`}
+              className="rounded p-1 text-neutral-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+            >
+              <Trash2 size={16} />
+            </button>
           </li>
         ))}
       </ul>

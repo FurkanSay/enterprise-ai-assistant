@@ -82,3 +82,6 @@ class Session(BaseModel):
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None = None
+    # Fork lineage. Populated on sessions created via /sessions/{id}/fork.
+    parent_session_id: str | None = None
+    forked_from_message_id: str | None = None

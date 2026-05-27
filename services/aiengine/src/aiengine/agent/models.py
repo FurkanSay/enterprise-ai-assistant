@@ -32,6 +32,15 @@ class SessionRow(Base):
     compaction_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Fork lineage — see migration in 07-aiengine-tables.sql.
+    parent_session_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("aiengine_schema.sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    forked_from_message_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

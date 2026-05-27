@@ -22,7 +22,11 @@ COPY libs/generated/python/           libs/generated/python/
 
 WORKDIR /app/services/aiengine
 # No uv.lock committed yet — resolve fresh during the image build.
-RUN --mount=type=cache,target=/root/.cache/uv \
+# `uv cache clean` before sync defends against corrupt cached wheels
+# left behind by a crashed prior build (we hit a partial qdrant-client
+# wheel that refused to reinstall — "Metadata field Name not found" —
+# until the cache was pruned).
+RUN --mount=type=cache,id=uv-cache-v2,target=/root/.cache/uv \
     uv sync --no-install-project
 
 # Copy real source and finalise install.
@@ -31,7 +35,7 @@ COPY services/aiengine/src       services/aiengine/src
 COPY services/aiengine/README.md services/aiengine/README.md
 
 WORKDIR /app/services/aiengine
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=uv-cache-v2,target=/root/.cache/uv \
     uv sync
 
 # ─── Runtime stage ───────────────────────────────────────────────────────

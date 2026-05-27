@@ -111,6 +111,25 @@ impl Bm25Index {
         })
     }
 
+    /// Drop every indexed chunk belonging to (tenant_id, document_id).
+    /// Tantivy doesn't have AND-delete in one call, so we delete by
+    /// document_id and rely on UUIDs being globally unique — the
+    /// tenant filter is enforced at search time too.
+    pub fn delete_document(
+        &self,
+        _tenant_id: &str,
+        document_id: &str,
+    ) -> Result<(), IndexError> {
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|e| IndexError::Tantivy(format!("writer mutex poisoned: {e}")))?;
+        let term = Term::from_field_text(self.fields.document_id, document_id);
+        writer.delete_term(term);
+        writer.commit()?;
+        Ok(())
+    }
+
     /// Bulk-index chunks for a single document.
     /// Returns the number of chunks indexed.
     pub fn index_document(

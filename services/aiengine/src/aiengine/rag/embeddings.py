@@ -1,33 +1,44 @@
-"""Embedding generation — sentence-transformers, lazy-loaded model."""
+"""Query-time embedding via Processing service HTTP.
 
-from functools import lru_cache
+Why not sentence-transformers in-process: Processing is already running
+the fastembed BGE-Base ONNX model and wrote every chunk vector with it.
+Calling out to Processing keeps query and ingest on the exact same model
+— if we swap to bge-m3 tomorrow, one config change moves both paths
+together. The alternative (local sentence-transformers) sat at 384d
+MiniLM and silently returned zero results against a 768d Qdrant index.
 
+Cost: one extra HTTP hop per chat turn (~50ms on a warm model). The
+correctness gain is worth more than the latency.
+"""
+
+import httpx
 import structlog
 
 from aiengine.core.config import get_settings
 
 log = structlog.get_logger(__name__)
 
+_TIMEOUT = httpx.Timeout(10.0, connect=2.0)
 
-@lru_cache(maxsize=1)
-def _get_model():  # type: ignore[no-untyped-def]
-    """Lazy-load model on first call. Avoids loading at import time."""
-    from sentence_transformers import SentenceTransformer
 
+async def embed_text(text: str) -> list[float]:
+    """Embed a single query string. Async — sits on the chat hot path."""
+    if not text.strip():
+        raise ValueError("embed_text: empty input")
     settings = get_settings()
-    log.info("embeddings.model.loading", model=settings.default_embedding_model)
-    return SentenceTransformer(settings.default_embedding_model)
+    url = f"{settings.processing_http_url.rstrip('/')}/embed"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.post(url, json={"text": text})
+        resp.raise_for_status()
+        body = resp.json()
+    vector = body.get("vector")
+    if not isinstance(vector, list) or not vector:
+        raise RuntimeError(f"/embed returned no vector: {body}")
+    return vector
 
 
-def embed_text(text: str) -> list[float]:
-    """Embed a single text."""
-    model = _get_model()
-    vec = model.encode(text, convert_to_numpy=True, show_progress_bar=False)
-    return vec.tolist()  # type: ignore[no-any-return]
-
-
-def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Embed a batch of texts. ~10-50x faster than calling embed_text in a loop."""
-    model = _get_model()
-    vecs = model.encode(texts, convert_to_numpy=True, show_progress_bar=False, batch_size=32)
-    return vecs.tolist()  # type: ignore[no-any-return]
+async def embed_batch(texts: list[str]) -> list[list[float]]:
+    """Batch shim — Processing's /embed is single-text today, so we
+    sequence the calls. Trivial to upgrade to a real batch endpoint
+    once we have a use case (currently only the query path needs this)."""
+    return [await embed_text(t) for t in texts]

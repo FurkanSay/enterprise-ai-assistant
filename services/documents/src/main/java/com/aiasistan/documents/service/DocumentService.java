@@ -133,6 +133,48 @@ public class DocumentService {
         return repository.findById(id);
     }
 
+    /**
+     * Delete a document and everything that lives downstream:
+     *   - documents_schema.document_chunks_meta (ON DELETE CASCADE)
+     *   - documents_schema.documents row
+     *   - MinIO objects (raw + text sidecar)
+     *   - publish doc.deleted.v1 so Processing can purge Qdrant + tantivy
+     *
+     * Returns false if no document with that id is visible under the
+     * current tenant. RLS is the only gate — we never query by tenant_id
+     * explicitly.
+     */
+    @Transactional
+    public boolean delete(UUID id) {
+        Optional<Document> maybe = repository.findById(id);
+        if (maybe.isEmpty()) {
+            return false;
+        }
+        Document doc = maybe.get();
+
+        // Best-effort MinIO cleanup. If MinIO is down the DB row still
+        // gets deleted — the orphan object can be reclaimed by a sweeper
+        // job later, but leaving the row around blocks re-upload of the
+        // same filename forever.
+        try {
+            storage.remove(doc.getMinioObjectKey());
+        } catch (Exception e) {
+            log.warn("delete.minio.raw.failed key={} error={}",
+                    doc.getMinioObjectKey(), e.getMessage());
+        }
+        try {
+            storage.remove(storage.buildTextObjectKey(doc.getTenantId(), doc.getId()));
+        } catch (Exception e) {
+            log.warn("delete.minio.text.failed document_id={} error={}",
+                    doc.getId(), e.getMessage());
+        }
+
+        repository.delete(doc);
+        events.publishDeleted(doc.getTenantId(), doc.getId());
+        log.info("delete.ok document_id={} title={}", doc.getId(), doc.getTitle());
+        return true;
+    }
+
     @Transactional(readOnly = true)
     public String presignedDownloadUrl(UUID id) {
         Document doc = repository.findById(id)

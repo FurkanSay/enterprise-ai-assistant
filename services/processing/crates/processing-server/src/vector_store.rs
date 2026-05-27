@@ -10,8 +10,9 @@
 
 use anyhow::{Context, Result};
 use qdrant_client::qdrant::{
-    point_id::PointIdOptions, value::Kind as ValueKind, CreateCollectionBuilder, Distance,
-    PointStruct, UpsertPointsBuilder, Value, VectorParamsBuilder,
+    point_id::PointIdOptions, value::Kind as ValueKind, Condition, CreateCollectionBuilder,
+    DeletePointsBuilder, Distance, Filter, PointStruct, UpsertPointsBuilder, Value,
+    VectorParamsBuilder,
 };
 use qdrant_client::Qdrant;
 use std::collections::HashMap;
@@ -93,6 +94,31 @@ impl VectorStore {
             .upsert_points(UpsertPointsBuilder::new(&self.collection, points).wait(true))
             .await
             .context("qdrant upsert_points")?;
+        Ok(())
+    }
+
+    /// Delete every point belonging to (tenant_id, document_id). The
+    /// tenant condition is redundant given UUIDs are unique, but we
+    /// keep it as a defense-in-depth match: even if a future schema
+    /// bug let two tenants share a document_id, we'd only touch one
+    /// tenant's points here.
+    pub async fn delete_document(
+        &self,
+        tenant_id: Uuid,
+        document_id: Uuid,
+    ) -> Result<()> {
+        let filter = Filter::must(vec![
+            Condition::matches("tenant_id", tenant_id.to_string()),
+            Condition::matches("document_id", document_id.to_string()),
+        ]);
+        self.client
+            .delete_points(
+                DeletePointsBuilder::new(&self.collection)
+                    .points(filter)
+                    .wait(true),
+            )
+            .await
+            .context("qdrant delete_points")?;
         Ok(())
     }
 }

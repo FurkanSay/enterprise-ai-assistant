@@ -35,6 +35,7 @@ public class DocumentEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(DocumentEventPublisher.class);
 
     static final String STREAM_KEY = "doc.uploaded.v1";
+    static final String DELETED_STREAM_KEY = "doc.deleted.v1";
 
     private final StringRedisTemplate redis;
     private final ApplicationEventPublisher springEvents;
@@ -48,6 +49,32 @@ public class DocumentEventPublisher {
     /** Called from the service inside the @Transactional method. */
     public void publishUploaded(Document doc, String textObjectKey) {
         springEvents.publishEvent(new DocumentUploadedEvent(doc, textObjectKey));
+    }
+
+    /** Best-effort fire-and-forget — Processing tails this stream to
+     *  purge Qdrant + tantivy entries for a deleted document. We do
+     *  NOT route through Spring's AFTER_COMMIT phase here because the
+     *  delete itself already committed by the time the service returns
+     *  the boolean to the controller; an extra Spring event would just
+     *  add ceremony. */
+    public void publishDeleted(java.util.UUID tenantId, java.util.UUID documentId) {
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("event", "doc.deleted.v1");
+        payload.put("tenant_id", tenantId.toString());
+        payload.put("document_id", documentId.toString());
+        payload.put("deleted_at", java.time.Instant.now().toString());
+
+        org.springframework.data.redis.connection.stream.ObjectRecord<String, java.util.Map<String, String>> record =
+                org.springframework.data.redis.connection.stream.StreamRecords.newRecord()
+                        .ofObject(payload)
+                        .withStreamKey(DELETED_STREAM_KEY);
+        try {
+            redis.opsForStream().add(record);
+            log.info("event.published stream={} document_id={}", DELETED_STREAM_KEY, documentId);
+        } catch (RuntimeException e) {
+            log.error("event.publish.failed stream={} document_id={} error={}",
+                    DELETED_STREAM_KEY, documentId, e.getMessage(), e);
+        }
     }
 
     /**

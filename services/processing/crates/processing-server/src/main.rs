@@ -21,9 +21,10 @@ use anyhow::{Context, Result};
 use axum::{
     extract::State,
     http::StatusCode,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -49,6 +50,22 @@ use bm25_index::Bm25Index;
 #[derive(Clone)]
 struct AppState {
     ready: Arc<AtomicBool>,
+    /// Shared with the consumer; we expose the same model on /embed so
+    /// query-time embeddings use the EXACT same vectors as ingest-time.
+    /// Single source of truth — if we rotate the model tomorrow, both
+    /// paths move together. No silent retrieval drift.
+    embedder: crate::embedder::Embedder,
+}
+
+#[derive(Deserialize)]
+struct EmbedRequest {
+    text: String,
+}
+
+#[derive(Serialize)]
+struct EmbedResponse {
+    vector: Vec<f32>,
+    dimensions: u64,
 }
 
 #[tokio::main]
@@ -69,10 +86,17 @@ async fn main() -> Result<()> {
     let db = Db::connect(&cfg).await.context("db connect")?;
     let bm25 = Arc::new(Bm25Index::open_or_create(&cfg.bm25_index_path).context("bm25 open")?);
 
+    // Clone the embedder once: one copy keeps living inside the pipeline
+    // for ingest, the other is exposed on /embed for query-side reuse.
+    // `Embedder` wraps Arc<TextEmbedding>, so this clone is cheap.
+    let embedder_for_http = embedder.clone();
     let pipeline = Pipeline::new(storage, embedder, qdrant, bm25, db);
 
     let ready = Arc::new(AtomicBool::new(false));
-    let state = AppState { ready: ready.clone() };
+    let state = AppState {
+        ready: ready.clone(),
+        embedder: embedder_for_http,
+    };
 
     // Consumer task — owns the Redis connection for its lifetime.
     let consumer = Consumer::connect(&cfg).await.context("consumer connect")?;
@@ -83,10 +107,14 @@ async fn main() -> Result<()> {
         }
     });
 
-    // HTTP health surface.
+    // HTTP surface.
     let app = Router::new()
-        .route("/health/live", get(|| async { Json(json!({"status":"ok","service":"processing"})) }))
+        .route(
+            "/health/live",
+            get(|| async { Json(json!({"status":"ok","service":"processing"})) }),
+        )
         .route("/health/ready", get(ready_handler))
+        .route("/embed", post(embed_handler))
         .with_state(state);
 
     let addr: SocketAddr = cfg.http_addr.parse().context("http_addr parse")?;
@@ -102,6 +130,29 @@ async fn ready_handler(State(state): State<AppState>) -> (StatusCode, Json<serde
     } else {
         (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"status":"starting"})))
     }
+}
+
+/// Query-time embedding endpoint. AI Engine POSTs the user's question
+/// here and gets back a vector compatible with what we wrote at ingest.
+/// Internal-only — no auth (this lives on the docker network).
+async fn embed_handler(
+    State(state): State<AppState>,
+    Json(req): Json<EmbedRequest>,
+) -> Result<Json<EmbedResponse>, (StatusCode, String)> {
+    if req.text.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "text is required".to_string()));
+    }
+    let vectors = state
+        .embedder
+        .embed(vec![req.text])
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("embed: {e:#}")))?;
+    let vector = vectors
+        .into_iter()
+        .next()
+        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "empty embed result".to_string()))?;
+    let dimensions = vector.len() as u64;
+    Ok(Json(EmbedResponse { vector, dimensions }))
 }
 
 fn init_tracing() {

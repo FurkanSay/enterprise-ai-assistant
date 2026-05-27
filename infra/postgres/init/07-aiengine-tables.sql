@@ -3,19 +3,32 @@
 
 -- ─── sessions ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS aiengine_schema.sessions (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id           UUID NOT NULL REFERENCES identity_schema.tenants(id) ON DELETE RESTRICT,
-    user_id             UUID NOT NULL,  -- references identity_schema.users.id (no cross-schema FK)
-    title               TEXT NOT NULL DEFAULT '',
-    model               TEXT NOT NULL DEFAULT '',
-    message_count       INT NOT NULL DEFAULT 0,
-    compaction_count    INT NOT NULL DEFAULT 0,
-    compaction_summary  TEXT,
-    last_heartbeat_at   TIMESTAMPTZ,
-    archived_at         TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id                UUID NOT NULL REFERENCES identity_schema.tenants(id) ON DELETE RESTRICT,
+    user_id                  UUID NOT NULL,  -- references identity_schema.users.id (no cross-schema FK)
+    title                    TEXT NOT NULL DEFAULT '',
+    model                    TEXT NOT NULL DEFAULT '',
+    message_count            INT NOT NULL DEFAULT 0,
+    compaction_count         INT NOT NULL DEFAULT 0,
+    compaction_summary       TEXT,
+    last_heartbeat_at        TIMESTAMPTZ,
+    archived_at              TIMESTAMPTZ,
+    -- Conversation forking — when a session is created by /sessions/{id}/fork,
+    -- these track the parent for sidebar lineage rendering. NULL on root sessions.
+    parent_session_id        UUID REFERENCES aiengine_schema.sessions(id) ON DELETE SET NULL,
+    forked_from_message_id   UUID,  -- the assistant message the user forked from
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Existing deployments: the two fork columns were added in Phase K. The
+-- ALTER below is a no-op on fresh installs (column already exists from
+-- the CREATE above) but lets older databases pick up the change without
+-- a full re-init.
+ALTER TABLE aiengine_schema.sessions
+    ADD COLUMN IF NOT EXISTS parent_session_id UUID REFERENCES aiengine_schema.sessions(id) ON DELETE SET NULL;
+ALTER TABLE aiengine_schema.sessions
+    ADD COLUMN IF NOT EXISTS forked_from_message_id UUID;
 
 CREATE INDEX IF NOT EXISTS idx_sessions_tenant_user ON aiengine_schema.sessions(tenant_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON aiengine_schema.sessions(tenant_id, archived_at)

@@ -4,6 +4,7 @@ import com.aiasistan.documents.config.MinioProperties;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.http.Method;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +61,17 @@ public class MinioStorage {
                         .build()
         );
         log.info("minio.upload bucket={} key={} bytes={}", bucket, objectKey, size);
+    }
+
+    /** Delete an object. Idempotent — missing keys do not raise. */
+    public void remove(String objectKey) throws Exception {
+        client.removeObject(
+                RemoveObjectArgs.builder()
+                        .bucket(bucket)
+                        .object(objectKey)
+                        .build()
+        );
+        log.info("minio.remove bucket={} key={}", bucket, objectKey);
     }
 
     /**

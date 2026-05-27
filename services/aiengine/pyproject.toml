@@ -57,14 +57,26 @@ dependencies = [
     "tenacity>=9.0.0",
     "python-ulid>=3.0.0",
     "orjson>=3.10.0",
+
+    # ─── RAG retrieval (Phase J) ──────────────────────────────────────────
+    # Qdrant client is needed on the base image so the doc_search tool
+    # registers at startup. Embedding is delegated to Processing's /embed
+    # over HTTP, so we do NOT need sentence-transformers or torch here —
+    # those stay in the `ml` extra for components that actually train or
+    # run models locally.
+    # Pinned to 1.12.x because a 1.18.x wheel partially cached during a
+    # Docker daemon crash refused to install ("Metadata field Name not
+    # found"). The pin both fixes the corruption (uv re-fetches) and
+    # protects against another mid-download crash.
+    "qdrant-client>=1.12.0,<1.13",
 ]
 
 [project.optional-dependencies]
-# Phase D extra — uv sync --extra ml installs these on top of the base set.
+# Heavy ML stack: only the (future) reranker + native embedder need these.
+# uv sync --extra ml installs them on top of the base set.
 ml = [
     "torch>=2.4",
     "sentence-transformers>=3.3.0",
-    "qdrant-client>=1.12.0",
     "pgvector>=0.3.6",
     "anthropic>=0.39.0",
     "openai>=1.55.0",

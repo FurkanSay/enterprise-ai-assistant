@@ -39,11 +39,18 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
 
     # ─── Qdrant ──────────────────────────────────────────────────────────
+    # Collection + dimensions MUST match what Processing wrote at ingest:
+    # Processing uses fastembed BGE-Base-EN (768d) into the `documents`
+    # collection. Mismatched config = empty search results.
     qdrant_url: str = "http://localhost:6333"
-    qdrant_collection: str = "kai_chunks"
-    qdrant_vector_size: int = 384  # all-MiniLM-L6-v2
+    qdrant_collection: str = "documents"
+    qdrant_vector_size: int = 768
 
-    # ─── Processing (gRPC client) ────────────────────────────────────────
+    # ─── Processing service ──────────────────────────────────────────────
+    # Used for query-time embeddings (POST /embed) so query vectors come
+    # from the same model that wrote the index. Also reachable over gRPC
+    # for BM25 search (Phase G+ path, not yet on the hot retrieval line).
+    processing_http_url: str = "http://processing:8083"
     processing_grpc_url: str = "localhost:8083"
 
     # ─── LLM providers ───────────────────────────────────────────────────

@@ -117,6 +117,75 @@ export async function uploadDocument(
   return res.json();
 }
 
+// ── Sessions ────────────────────────────────────────────────────────────
+
+export interface SessionSummary {
+  id: string;
+  title: string;
+  model: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+  parent_session_id?: string | null;
+  forked_from_message_id?: string | null;
+}
+
+export interface SessionMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  sequence_number: number;
+  created_at: string;
+}
+
+export interface SessionDetail extends SessionSummary {
+  messages: SessionMessage[];
+}
+
+export async function listSessions(limit = 20): Promise<SessionSummary[]> {
+  const res = await authedFetch(`/api/v1/sessions?limit=${limit}`);
+  if (!res.ok) throw new Error(`list sessions failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getSession(sessionId: string): Promise<SessionDetail> {
+  const res = await authedFetch(`/api/v1/sessions/${sessionId}`);
+  if (!res.ok) throw new Error(`get session failed: ${res.status}`);
+  return res.json();
+}
+
+export async function forkSession(
+  sessionId: string,
+  upToMessageId?: string,
+): Promise<SessionSummary> {
+  const body = upToMessageId ? { up_to_message_id: upToMessageId } : {};
+  const res = await authedFetch(`/api/v1/sessions/${sessionId}/fork`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`fork session failed: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  const res = await authedFetch(`/api/v1/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`delete session failed: ${res.status}`);
+  }
+}
+
+export async function deleteDocument(documentId: string): Promise<void> {
+  const res = await authedFetch(`/api/v1/documents/${documentId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`delete document failed: ${res.status}`);
+  }
+}
+
 // ── Chat ────────────────────────────────────────────────────────────────
 
 export async function* sendChat(

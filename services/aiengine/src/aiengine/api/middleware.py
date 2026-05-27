@@ -63,7 +63,9 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
     Public paths (e.g. /health) are exempt from tenant requirement.
     """
 
-    EXEMPT_PREFIXES = ("/health", "/docs", "/openapi.json", "/redoc")
+    # /metrics is Prometheus-scraped from inside the cluster and is not
+    # tenant-scoped — exempting it keeps the log clean of every-15s 401s.
+    EXEMPT_PREFIXES = ("/health", "/metrics", "/docs", "/openapi.json", "/redoc")
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
