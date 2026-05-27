@@ -17,7 +17,6 @@ from aiengine.agent.repository import (
     list_messages,
     list_sessions,
 )
-from aiengine.agent.state import MessageRole
 from aiengine.core.db import tenant_session
 from aiengine.core.tenant import get_current_tenant
 
@@ -93,9 +92,11 @@ async def get_session_endpoint(session_id: str) -> SessionDetail:
 
     flat_messages: list[SessionMessage] = []
     for m in messages:
-        # Frontend only renders user + assistant text. Skip tool roles
-        # and synthesize the visible text from the message's text blocks.
-        if m.role not in (MessageRole.USER, MessageRole.ASSISTANT):
+        # `Message.role` is stored as the enum *value* (a string) because
+        # state.Message uses `use_enum_values=True`. So comparisons and
+        # serialisation both go through the raw string — no .value access.
+        role_str = m.role if isinstance(m.role, str) else m.role.value
+        if role_str not in ("user", "assistant"):
             continue
         text = "\n".join(b.text for b in m.blocks if b.type == "text" and b.text)
         if not text:
@@ -103,7 +104,7 @@ async def get_session_endpoint(session_id: str) -> SessionDetail:
         flat_messages.append(
             SessionMessage(
                 id=m.id,
-                role=m.role.value,
+                role=role_str,
                 text=text,
                 sequence_number=m.sequence_number,
                 created_at=m.created_at.isoformat(),
