@@ -45,7 +45,7 @@ from aiengine.tools.registry import get_tool_registry
 
 log = structlog.get_logger(__name__)
 
-SYSTEM_PROMPT = (
+SYSTEM_PROMPT_NORMAL = (
     "You are the Enterprise AI Assistant for a multi-tenant platform.\n"
     "\n"
     "You have access to a `doc_search` tool that retrieves passages from the "
@@ -59,6 +59,33 @@ SYSTEM_PROMPT = (
     "When citing, reference the document by name or source_location from "
     "the tool result. Keep answers concise. Reply in the user's language."
 )
+
+SYSTEM_PROMPT_DEEP_SEARCH = (
+    "You are the Enterprise AI Assistant in DEEP SEARCH mode — an academic "
+    "research helper.\n"
+    "\n"
+    "Tools available:\n"
+    "  - `literature_search(query, max_results?, year_from?)`: search the "
+    "open academic graph (OpenAlex, Semantic Scholar, arXiv). Always call "
+    "this FIRST for any literature, related-work, or 'recent papers' "
+    "question. Pass a focused English query even if the user wrote in "
+    "Turkish — academic abstracts are predominantly English.\n"
+    "  - `ingest_paper(paper)`: add a specific paper to the tenant's RAG "
+    "corpus. ONLY call this when the user explicitly asks to add/import a "
+    "paper, OR clicks the import button in the UI. Never auto-ingest the "
+    "whole result set.\n"
+    "\n"
+    "When showing results, briefly summarise the top 3-5 papers in your "
+    "own words and let the UI render the paper cards from the tool output. "
+    "Cite by author + year (e.g. 'Smith et al., 2023'). Reply in the "
+    "user's language."
+)
+
+# Tool catalogues per mode. Names match registered tool IDs.
+TOOLS_BY_MODE: dict[str, list[str]] = {
+    "normal": ["doc_search", "web_search", "web_fetch"],
+    "deep_search": ["literature_search", "ingest_paper"],
+}
 
 
 @dataclass(slots=True)
@@ -75,12 +102,30 @@ async def run_turn(
     user_message: str,
     model_override: str | None = None,
     allowed_tools: list[str] | None = None,
+    mode: str = "normal",
 ) -> AsyncIterator[AgentEvent]:
-    """Execute one agent turn, yielding SSE events as they happen."""
+    """Execute one agent turn, yielding SSE events as they happen.
+
+    `mode` selects the tool catalogue and system prompt. The frontend
+    forces a fresh session when the user toggles modes, so a single
+    session always sees one consistent toolset.
+    """
     settings = get_settings()
     registry = get_tool_registry()
     iteration_cap = settings.max_tool_iterations_pro
     model = model_override or settings.default_llm_model
+
+    # Resolve mode → system prompt + tool gate. Caller-supplied
+    # allowed_tools (if any) intersects with the mode's catalogue so a
+    # deep-search chat cannot escape into doc_search and vice versa.
+    system_prompt = (
+        SYSTEM_PROMPT_DEEP_SEARCH if mode == "deep_search" else SYSTEM_PROMPT_NORMAL
+    )
+    mode_tools = TOOLS_BY_MODE.get(mode, TOOLS_BY_MODE["normal"])
+    if allowed_tools:
+        allowed_tools = [t for t in allowed_tools if t in mode_tools]
+    else:
+        allowed_tools = list(mode_tools)
 
     async with tenant_session(tenant) as db:
         # ─── 1. Load / create session ──────────────────────────────────
@@ -92,8 +137,21 @@ async def run_turn(
             session = await get_session(db, session_uuid)
             if session is None:
                 raise NotFoundError(f"Session {session_id} not found")
+            # Persisted session mode trumps the caller's mode — the
+            # frontend forces a fresh session on mode-switch, so an
+            # existing session always carries the mode it was born with.
+            mode = session.mode or mode
+            system_prompt = (
+                SYSTEM_PROMPT_DEEP_SEARCH if mode == "deep_search" else SYSTEM_PROMPT_NORMAL
+            )
+            mode_tools = TOOLS_BY_MODE.get(mode, TOOLS_BY_MODE["normal"])
+            allowed_tools = (
+                [t for t in (allowed_tools or mode_tools) if t in mode_tools]
+            )
         else:
-            session = await create_session(db, tenant, title=user_message[:80], model=model)
+            session = await create_session(
+                db, tenant, title=user_message[:80], model=model, mode=mode,
+            )
             yield AgentEvent("session", {"id": session.id, "created": True})
 
         session_uuid = UUID(session.id)
@@ -133,7 +191,7 @@ async def run_turn(
                 model=model,
                 messages=history,
                 tools=tool_specs,
-                system_prompt=SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 max_tokens=settings.max_tokens_per_request,
             ):
                 if chunk.kind == "text_delta":

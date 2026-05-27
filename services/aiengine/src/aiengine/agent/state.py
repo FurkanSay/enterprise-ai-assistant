@@ -85,3 +85,5 @@ class Session(BaseModel):
     # Fork lineage. Populated on sessions created via /sessions/{id}/fork.
     parent_session_id: str | None = None
     forked_from_message_id: str | None = None
+    # Tool-catalogue mode for this session. See agent.loop.TOOLS_BY_MODE.
+    mode: str = "normal"

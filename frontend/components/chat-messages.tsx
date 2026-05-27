@@ -5,10 +5,20 @@ import { FileText, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
 import { AttachmentPreview } from './attachment-preview';
+import { PaperCard, type Paper } from './paper-card';
+
+export interface ToolResultBlock {
+  kind: 'paper_list' | 'paper_ingested' | string;
+  data: Record<string, unknown>;
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
+  /** Structured tool outputs attached to this assistant turn. Rendered
+   *  by the messages component (paper cards, ingest confirmations).
+   *  Empty / undefined on plain-text turns. */
+  toolResults?: ToolResultBlock[];
 }
 
 interface Props {
@@ -18,6 +28,16 @@ interface Props {
    *  above the next assistant bubble so the user can see the model is
    *  working rather than staring at silence. */
   thinking?: string;
+  /** Callback when the user clicks "RAG'e ekle" on a paper card. The
+   *  chat page composes a follow-up message that nudges the model to
+   *  call its `ingest_paper` tool. */
+  onIngestPaper?: (paper: Paper) => void;
+  /** Per-paper ingest status, keyed by DOI / arXiv id / source_id. */
+  ingestStatus?: Record<string, 'idle' | 'pending' | 'done' | 'error'>;
+}
+
+function paperKey(p: Paper): string {
+  return p.doi || p.arxiv_id || p.source_id;
 }
 
 interface Part {
@@ -58,7 +78,12 @@ function firstLine(text: string): string {
   return 'Yapıştırılan metin';
 }
 
-export function ChatMessages({ messages, thinking = '' }: Props) {
+export function ChatMessages({
+  messages,
+  thinking = '',
+  onIngestPaper,
+  ingestStatus,
+}: Props) {
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [showThinking, setShowThinking] = useState(false);
 
@@ -117,6 +142,47 @@ export function ChatMessages({ messages, thinking = '' }: Props) {
                   </button>
                 ),
               )}
+              {/* Tool results — paper lists from literature_search land
+                  here as a grid of cards. Ingest confirmations stack
+                  underneath as compact status rows. */}
+              {(m.toolResults ?? []).map((tr, ti) => {
+                if (tr.kind === 'paper_list') {
+                  const papers = (tr.data.papers as Paper[]) ?? [];
+                  return (
+                    <div key={`tr-${ti}`} className="space-y-2 pt-1">
+                      <div className="text-[11px] font-medium opacity-70">
+                        Bulunan kaynaklar ({papers.length})
+                      </div>
+                      <div className="grid gap-2">
+                        {papers.map((paper) => (
+                          <PaperCard
+                            key={paperKey(paper)}
+                            paper={paper}
+                            onIngest={(p) => onIngestPaper?.(p)}
+                            ingestStatus={
+                              ingestStatus?.[paperKey(paper)] ?? 'idle'
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                if (tr.kind === 'paper_ingested') {
+                  const docId = tr.data.document_id as string | undefined;
+                  const title = tr.data.title as string | undefined;
+                  return (
+                    <div
+                      key={`tr-${ti}`}
+                      className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                    >
+                      ✓ {title || 'Doküman'} RAG&apos;e eklendi
+                      {docId ? ` · ${docId.slice(0, 8)}…` : ''}
+                    </div>
+                  );
+                }
+                return null;
+              })}
             </div>
           );
         })}

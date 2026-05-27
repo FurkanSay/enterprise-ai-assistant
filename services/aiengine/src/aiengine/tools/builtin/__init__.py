@@ -33,3 +33,20 @@ def register_all_builtin(registry: GlobalToolRegistry) -> None:
         log.info("tool.doc_search.disabled", reason=str(exc))
     else:
         register_doc_search(registry)
+
+    # Phase L — Deep Search tools. These are only included in an
+    # agent turn's tool list when ChatRequest.mode == "deep_search";
+    # the regular catalogue filters them out so tenant chats stay
+    # scoped to their own documents.
+    try:
+        from aiengine.tools.builtin.literature_search import (
+            register as register_literature_search,
+        )
+        from aiengine.tools.builtin.ingest_paper import (
+            register as register_ingest_paper,
+        )
+    except ImportError as exc:
+        log.info("tool.research.disabled", reason=str(exc))
+    else:
+        register_literature_search(registry)
+        register_ingest_paper(registry)

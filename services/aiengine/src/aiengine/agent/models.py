@@ -41,6 +41,9 @@ class SessionRow(Base):
     forked_from_message_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True), nullable=True
     )
+    # "normal" | "deep_search" — selects the agent's tool catalogue.
+    # Defaulted at the DB so existing sessions read back as normal.
+    mode: Mapped[str] = mapped_column(Text, nullable=False, default="normal")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

@@ -29,6 +29,10 @@ ALTER TABLE aiengine_schema.sessions
     ADD COLUMN IF NOT EXISTS parent_session_id UUID REFERENCES aiengine_schema.sessions(id) ON DELETE SET NULL;
 ALTER TABLE aiengine_schema.sessions
     ADD COLUMN IF NOT EXISTS forked_from_message_id UUID;
+-- Phase L: tool-catalogue mode for this session. "normal" or "deep_search".
+-- Persisted so reloading an old deep-search chat keeps the right toolset.
+ALTER TABLE aiengine_schema.sessions
+    ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'normal';
 
 CREATE INDEX IF NOT EXISTS idx_sessions_tenant_user ON aiengine_schema.sessions(tenant_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON aiengine_schema.sessions(tenant_id, archived_at)

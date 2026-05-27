@@ -53,6 +53,20 @@ class Settings(BaseSettings):
     processing_http_url: str = "http://processing:8083"
     processing_grpc_url: str = "localhost:8083"
 
+    # ─── Documents service (Phase L) ─────────────────────────────────────
+    # The literature ingestor POSTs PDFs back to Documents directly over
+    # the docker network. Documents accepts X-Tenant-Id / X-User-Id from
+    # any internal caller — same trust model the Gateway uses.
+    documents_http_url: str = "http://documents:8082"
+
+    # ─── Academic research APIs (Phase L) ───────────────────────────────
+    # OpenAlex and Unpaywall expect an email for their "polite pool" /
+    # attribution. Leaving these blank still works (you'll just get
+    # stricter rate limits from OpenAlex and Unpaywall will refuse the
+    # call entirely — abstract fallback still works in that case).
+    polite_email: str = ""
+    unpaywall_email: str = ""
+
     # ─── LLM providers ───────────────────────────────────────────────────
     # OpenRouter is the primary gateway; LiteLLM picks the right downstream
     # provider from the `openrouter/...` model prefix. The native keys are

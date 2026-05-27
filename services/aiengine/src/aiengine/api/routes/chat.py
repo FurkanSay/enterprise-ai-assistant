@@ -14,7 +14,7 @@ must not break the SSE path.
 """
 
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Literal
 
 import orjson
 from fastapi import APIRouter, Body
@@ -47,6 +47,12 @@ class ChatRequest(BaseModel):
         default=None,
         description="If set, restrict tool catalog to these names.",
     )
+    # Phase L — Deep Search mode swaps the agent's tool catalogue:
+    #   normal       → doc_search + web_search + web_fetch (default)
+    #   deep_search  → literature_search + ingest_paper
+    # Frontend enforces that switching modes requires a new session, so
+    # one session always has one consistent toolset + system prompt.
+    mode: Literal["normal", "deep_search"] = "normal"
 
 
 @router.post("/chat")
@@ -74,6 +80,7 @@ async def chat(req: Annotated[ChatRequest, Body()]) -> EventSourceResponse:
             user_message=req.message,
             model_override=req.model,
             allowed_tools=req.allowed_tools,
+            mode=req.mode,
         ):
             if event.kind == "session":
                 current_session_id = event.data.get("id") or current_session_id

@@ -32,6 +32,7 @@ class SessionSummary(BaseModel):
     updated_at: str
     parent_session_id: str | None = None
     forked_from_message_id: str | None = None
+    mode: str = "normal"
 
 
 class ForkSessionRequest(BaseModel):
@@ -63,6 +64,7 @@ def _summary(s) -> SessionSummary:  # type: ignore[no-untyped-def]
         updated_at=s.updated_at.isoformat(),
         parent_session_id=s.parent_session_id,
         forked_from_message_id=s.forked_from_message_id,
+        mode=s.mode or "normal",
     )
 
 

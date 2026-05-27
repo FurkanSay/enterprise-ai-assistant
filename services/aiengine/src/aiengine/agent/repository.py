@@ -28,6 +28,7 @@ async def create_session(
     *,
     title: str = "",
     model: str = "",
+    mode: str = "normal",
 ) -> Session:
     """Insert a new session for the calling tenant + user."""
     now = datetime.now(UTC)
@@ -37,6 +38,7 @@ async def create_session(
         user_id=UUID(tenant.user_id),
         title=title,
         model=model,
+        mode=mode,
         message_count=0,
         created_at=now,
         updated_at=now,
@@ -231,6 +233,7 @@ def _session_from_row(row: SessionRow) -> Session:
         archived_at=row.archived_at,
         parent_session_id=str(row.parent_session_id) if row.parent_session_id else None,
         forked_from_message_id=str(row.forked_from_message_id) if row.forked_from_message_id else None,
+        mode=row.mode,
     )
 
 

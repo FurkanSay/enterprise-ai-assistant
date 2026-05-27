@@ -9,6 +9,7 @@ import { GitBranch } from 'lucide-react';
 import { ChatMessages, type ChatMessage } from '@/components/chat-messages';
 import { ChatInput } from '@/components/chat-input';
 import { SessionSidebar } from '@/components/session-sidebar';
+import type { Paper } from '@/components/paper-card';
 import {
   forkSession,
   getSession,
@@ -29,6 +30,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  const [mode, setMode] = useState<'normal' | 'deep_search'>('normal');
   const [error, setError] = useState<string | null>(null);
   // Live chain-of-thought from reasoning models (Nemotron, DeepSeek-R1).
   // Rendered in a separate "düşünüyor" panel while the LLM cogitates
@@ -37,6 +39,10 @@ export default function ChatPage() {
   const [thinking, setThinking] = useState<string>('');
   // Bumped after every assistant reply so the sidebar re-fetches.
   const [sidebarVersion, setSidebarVersion] = useState(0);
+  // Per-paper ingest status, keyed by paperKey (doi || arxiv_id || source_id).
+  const [ingestStatus, setIngestStatus] = useState<
+    Record<string, 'idle' | 'pending' | 'done' | 'error'>
+  >({});
 
   // Client-side route guard. Middleware can't see localStorage.
   useEffect(() => {
@@ -55,6 +61,10 @@ export default function ChatPage() {
       try {
         const detail = await getSession(id);
         setSessionId(detail.id);
+        // Lock the mode to whatever this session was born with — the
+        // backend would reject mismatches anyway, but keeping the UI
+        // honest avoids confused users.
+        setMode((detail.mode as 'normal' | 'deep_search') || 'normal');
         setMessages(
           detail.messages.map((m) => ({ role: m.role, text: m.text })),
         );
@@ -73,7 +83,44 @@ export default function ChatPage() {
     setSessionId(undefined);
     setMessages([]);
     setError(null);
+    setMode('normal');
   }, []);
+
+  function paperKey(p: Paper): string {
+    return p.doi || p.arxiv_id || p.source_id;
+  }
+
+  function handleIngestPaper(paper: Paper) {
+    const key = paperKey(paper);
+    if (ingestStatus[key] === 'pending' || ingestStatus[key] === 'done') return;
+    setIngestStatus((prev) => ({ ...prev, [key]: 'pending' }));
+    // Compose a deterministic follow-up turn that the model resolves
+    // into an `ingest_paper` tool call. We pass the full Paper record
+    // as inline JSON so the model has everything it needs (no extra
+    // round-trip), and prefix with a clear instruction.
+    const payload = JSON.stringify(paper);
+    handleSend(
+      `Lütfen şu makaleyi RAG koleksiyonuma ekle (ingest_paper):\n${payload}`,
+    );
+  }
+
+  function handleToggleDeepSearch() {
+    // Mode change always starts a fresh session so the toolset +
+    // system prompt stay consistent within one conversation.
+    const target = mode === 'deep_search' ? 'normal' : 'deep_search';
+    if (sessionId && messages.length > 0) {
+      const proceed = window.confirm(
+        target === 'deep_search'
+          ? 'Deep Search modu için yeni bir sohbet açılacak. Devam et?'
+          : 'Normal moda dönmek için yeni bir sohbet açılacak. Devam et?',
+      );
+      if (!proceed) return;
+    }
+    setSessionId(undefined);
+    setMessages([]);
+    setError(null);
+    setMode(target);
+  }
 
   // Pseudo-streaming buffer.
   // Some providers (Nemotron-3 free tier, certain OpenRouter routes)
@@ -129,10 +176,50 @@ export default function ChatPage() {
     let createdNew = sessionId === undefined;
 
     try {
-      for await (const event of sendChat(text, { sessionId })) {
+      for await (const event of sendChat(text, { sessionId, mode })) {
         if (event.event === 'session' && typeof event.data.id === 'string') {
           setSessionId(event.data.id);
           createdNew = true;
+        } else if (event.event === 'tool_result') {
+          // Surface the structured tool output on the active assistant
+          // bubble so chat-messages can render paper cards / ingest
+          // confirmations next to the answer text.
+          let parsed: unknown = null;
+          try {
+            parsed = JSON.parse((event.data as { output?: string }).output ?? '');
+          } catch {
+            parsed = null;
+          }
+          if (parsed && typeof parsed === 'object') {
+            const payload = parsed as {
+              ui_kind?: string;
+              doi?: string;
+              arxiv_id?: string;
+              source_id?: string;
+            };
+            if (
+              payload.ui_kind === 'paper_list' ||
+              payload.ui_kind === 'paper_ingested'
+            ) {
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last && last.role === 'assistant') {
+                  const tools = [...(last.toolResults ?? [])];
+                  tools.push({ kind: payload.ui_kind!, data: payload });
+                  next[next.length - 1] = { ...last, toolResults: tools };
+                }
+                return next;
+              });
+              if (payload.ui_kind === 'paper_ingested') {
+                const k =
+                  payload.doi || payload.arxiv_id || payload.source_id || '';
+                if (k) {
+                  setIngestStatus((prev) => ({ ...prev, [k]: 'done' }));
+                }
+              }
+            }
+          }
         } else if (event.event === 'thinking') {
           thinkingBuffer += event.data.text ?? '';
           setThinking(thinkingBuffer);
@@ -225,7 +312,14 @@ export default function ChatPage() {
       <main className="mx-auto flex h-screen flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
           <div>
-            <h1 className="text-lg font-semibold">Sohbet</h1>
+            <h1 className="flex items-center gap-2 text-lg font-semibold">
+              Sohbet
+              {mode === 'deep_search' && (
+                <span className="rounded-md bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                  Deep Search
+                </span>
+              )}
+            </h1>
             {sessionId && (
               <p className="text-xs text-neutral-500">
                 oturum: {sessionId.slice(0, 8)}…
@@ -266,8 +360,18 @@ export default function ChatPage() {
             {error}
           </div>
         )}
-        <ChatMessages messages={messages} thinking={thinking} />
-        <ChatInput onSend={handleSend} disabled={isStreaming} />
+        <ChatMessages
+          messages={messages}
+          thinking={thinking}
+          onIngestPaper={handleIngestPaper}
+          ingestStatus={ingestStatus}
+        />
+        <ChatInput
+          onSend={handleSend}
+          disabled={isStreaming}
+          mode={mode}
+          onToggleDeepSearch={handleToggleDeepSearch}
+        />
       </main>
     </div>
   );

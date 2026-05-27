@@ -129,6 +129,7 @@ export interface SessionSummary {
   updated_at: string;
   parent_session_id?: string | null;
   forked_from_message_id?: string | null;
+  mode?: 'normal' | 'deep_search';
 }
 
 export interface SessionMessage {
@@ -191,7 +192,11 @@ export async function deleteDocument(documentId: string): Promise<void> {
 
 export async function* sendChat(
   message: string,
-  options: { sessionId?: string; model?: string } = {},
+  options: {
+    sessionId?: string;
+    model?: string;
+    mode?: 'normal' | 'deep_search';
+  } = {},
 ): AsyncGenerator<ChatStreamEvent> {
   const response = await fetch(`${API_BASE}/api/v1/chat`, {
     method: 'POST',
@@ -202,6 +207,7 @@ export async function* sendChat(
     },
     body: JSON.stringify({
       message,
+      mode: options.mode ?? 'normal',
       session_id: options.sessionId,
       model: options.model,
     }),

@@ -1,7 +1,8 @@
 'use client';
 
 import { ClipboardEvent, useState } from 'react';
-import { FileText, X } from 'lucide-react';
+import { FileText, Microscope, X } from 'lucide-react';
+import clsx from 'clsx';
 
 import { AttachmentPreview } from './attachment-preview';
 
@@ -30,9 +31,17 @@ function attachmentTitle(text: string): string {
 export function ChatInput({
   onSend,
   disabled,
+  mode,
+  onToggleDeepSearch,
 }: {
   onSend: (text: string) => void;
   disabled?: boolean;
+  /** Current session's mode. `undefined` means "no active session yet". */
+  mode?: 'normal' | 'deep_search';
+  /** Click handler for the Deep Search toggle. The chat page is in
+   *  charge of confirming with the user + starting a fresh session — we
+   *  only fire the event here. */
+  onToggleDeepSearch?: () => void;
 }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<PasteAttachment[]>([]);
@@ -113,6 +122,27 @@ export function ChatInput({
           </div>
         )}
         <div className="flex gap-2">
+          {onToggleDeepSearch && (
+            <button
+              type="button"
+              onClick={onToggleDeepSearch}
+              disabled={disabled}
+              title={
+                mode === 'deep_search'
+                  ? 'Deep Search etkin. Tıkla → normal moda dön (yeni sohbet açılır)'
+                  : 'Deep Search modunu aç (yeni sohbet açılır)'
+              }
+              className={clsx(
+                'flex items-center gap-1 rounded-md border px-3 text-xs font-medium transition-colors',
+                mode === 'deep_search'
+                  ? 'border-purple-300 bg-purple-50 text-purple-800 hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950 dark:text-purple-200'
+                  : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800',
+              )}
+            >
+              <Microscope size={14} />
+              Deep Search
+            </button>
+          )}
           <textarea
             rows={1}
             value={text}
@@ -127,7 +157,9 @@ export function ChatInput({
             placeholder={
               attachments.length > 0
                 ? 'Soru ekleyin (Enter ile gönder)…'
-                : 'Soru yazın…'
+                : mode === 'deep_search'
+                  ? 'Akademik konu yazın — IEEE / arXiv / OpenAlex taranır…'
+                  : 'Soru yazın…'
             }
             className="flex-1 resize-none rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-900"
             disabled={disabled}
