@@ -4,11 +4,13 @@ import { RealtimeGateway } from './realtime.gateway';
 
 /**
  * Subscribes to Redis pub/sub channels published by the AI Engine:
- *   stream.<sessionId>   — LLM token stream
+ *   stream.<tenantId>.<sessionId>   — LLM token stream
  *
  * Pattern subscribe (PSUBSCRIBE) so we don't need to manage individual
- * subscriptions per session. When a message arrives, we look up the
- * sessionId in the channel name and ask the gateway to fanout.
+ * subscriptions per session. When a message arrives, we parse tenantId
+ * and sessionId out of the channel name and ask the gateway to fanout
+ * to the matching socket. The gateway re-asserts tenantId against the
+ * connected socket as a second line of defense.
  */
 @Injectable()
 export class TokenStreamConsumer implements OnModuleInit, OnModuleDestroy {
