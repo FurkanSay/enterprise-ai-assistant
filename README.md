@@ -127,10 +127,12 @@ git clone https://github.com/FurkanSay/enterprise-ai-assistant
 cd enterprise-ai-assistant
 
 cp .env.example .env
-# fill in at minimum: ANTHROPIC_API_KEY=sk-ant-...
+# At minimum, set one of OPENROUTER_API_KEY or ANTHROPIC_API_KEY.
+# DEFAULT_LLM_MODEL defaults to a free OpenRouter model; override to
+# something with a paid tier if you hit rate limits.
 
-make up        # docker compose up -d --build
-make health    # ping every service /health/ready
+docker compose up -d --build      # ~20 min cold, seconds warm
+docker compose ps                 # wait until every service is healthy
 ```
 
 Endpoints:
@@ -138,10 +140,30 @@ Endpoints:
 | What | Where |
 |---|---|
 | Frontend | http://localhost:3000 |
-| Gateway | http://localhost:8080 |
+| Gateway (API) | http://localhost:8080 |
 | Jaeger (distributed traces) | http://localhost:16686 |
 | Grafana | http://localhost:3001 |
 | MinIO console | http://localhost:9001 |
+
+### Demo flow
+
+1. Open http://localhost:3000 → **Kayıt ol**, pick any email + password.
+2. Log in. You're redirected to **/chat**.
+3. Click **Dokümanlar** in the header → upload a `.txt` / `.pdf` / `.docx`.
+4. Watch the status badge progress UPLOADED → PARSING → CHUNKING →
+   EMBEDDING → READY (~2-5 seconds on a small file).
+5. Back to **Sohbet**. Ask the assistant something about the document.
+   Tokens stream in token-by-token.
+
+### End-to-end smoke (one-shot)
+
+```bash
+./scripts/e2e-smoke.sh
+```
+
+Walks the full happy path with curl, asserts on every step, exits non-zero
+on the first failure. Useful for CI and for catching the kind of cross-
+service breakage that only shows up when everything is up at once.
 
 ## Project structure
 
@@ -172,14 +194,14 @@ enterprise-ai-assistant/
 | Phase | Description | Status |
 |---|---|---|
 | A | Monorepo skeleton, services, infrastructure, gRPC contracts | Done |
-| B | `buf generate`, DB migrations, RLS policies live | Next |
-| C | AI Engine end-to-end smoke (LiteLLM streaming) | Planned |
-| D | Documents upload, Tika parse, MinIO, event publish | Planned |
-| E | Processing chunker, tantivy, gRPC, Redis consumer | Planned |
-| F | Identity login, refresh, JWT, JWKS | Planned |
-| G | Realtime WebSocket auth, Redis pub/sub fanout | Planned |
-| H | Frontend chat UI, SSE / WS | Planned |
-| I | End-to-end smoke: upload PDF, ask question, cited answer | Planned |
+| B | `buf generate`, DB migrations, RLS policies live | Done |
+| C | AI Engine LLM streaming → DB persist → SSE | Done |
+| D | Documents upload, Tika parse, MinIO, event publish | Done |
+| E | Processing chunker, tantivy, fastembed, Qdrant, Redis consumer | Done |
+| F | Identity login, register, JWT, /me; Gateway HS256 validation | Done |
+| G | Realtime WebSocket auth, Redis pub/sub fanout from AI Engine | Done |
+| H | Frontend chat UI (Next.js, JWT auth, SSE streaming, doc upload) | Done |
+| I | End-to-end smoke script + observability polish | Done |
 
 Detailed plan and working agreements: [ROADMAP.md](./ROADMAP.md).
 

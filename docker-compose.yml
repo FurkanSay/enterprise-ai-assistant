@@ -122,6 +122,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
   # ─────────────────────────────────────────────────────────────────
   # APPLICATION SERVICES
