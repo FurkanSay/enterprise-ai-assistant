@@ -1,11 +1,18 @@
 'use client';
 
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import {
+  ChangeEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
 
-import { Trash2 } from 'lucide-react';
+import { Filter, Trash2, X } from 'lucide-react';
 
 import {
   deleteDocument,
@@ -37,8 +44,24 @@ function isPending(d: DocumentSummary): boolean {
   return d.status !== 'READY' && d.status !== 'FAILED';
 }
 
+// Next 15 requires useSearchParams() to live under a <Suspense> boundary.
+// Even with `dynamic = 'force-dynamic'`, the page-data collection pass
+// still does a prerender that bails out without one. The outer component
+// supplies the boundary; the inner component owns the hooks + state.
 export default function DocumentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <DocumentsPageInner />
+    </Suspense>
+  );
+}
+
+function DocumentsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Optional filter: only show docs ingested from a specific chat
+  // session. Populated by ?source_session_id=… on the URL.
+  const sourceSessionFilter = searchParams.get('source_session_id') || null;
   const [user, setUser] = useState<AuthUser | null>(null);
   const [docs, setDocs] = useState<DocumentSummary[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -62,7 +85,9 @@ export default function DocumentsPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const items = await listDocuments();
+      const items = await listDocuments(
+        sourceSessionFilter ? { sourceSessionId: sourceSessionFilter } : {},
+      );
       docsRef.current = items;
       setDocs(items);
     } catch (e) {
@@ -72,7 +97,7 @@ export default function DocumentsPage() {
       }
       setError(e instanceof Error ? e.message : 'Bilinmeyen hata');
     }
-  }, [router]);
+  }, [router, sourceSessionFilter]);
 
   // Initial load + adaptive polling: 2s while any doc is pending, otherwise idle.
   useEffect(() => {
@@ -199,10 +224,30 @@ export default function DocumentsPage() {
         )}
       </section>
 
+      {sourceSessionFilter && (
+        <div className="flex items-center gap-2 border-b border-neutral-200 bg-purple-50 px-6 py-2 text-xs text-purple-800 dark:border-neutral-800 dark:bg-purple-950 dark:text-purple-300">
+          <Filter size={12} />
+          <span className="font-medium">
+            Sadece &quot;{sourceSessionFilter.slice(0, 8)}…&quot; sohbetinden
+            eklenen kaynaklar
+          </span>
+          <button
+            type="button"
+            onClick={() => router.replace('/documents')}
+            aria-label="Filtreyi kaldır"
+            className="rounded p-0.5 hover:bg-purple-100 dark:hover:bg-purple-900"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       <ul className="flex-1 overflow-y-auto divide-y divide-neutral-200 dark:divide-neutral-800">
         {docs.length === 0 && (
           <li className="px-6 py-8 text-center text-sm text-neutral-500">
-            Henüz doküman yok. Yukarıdan bir dosya yükleyin.
+            {sourceSessionFilter
+              ? 'Bu sohbetten eklenmiş kaynak yok.'
+              : 'Henüz doküman yok. Yukarıdan bir dosya yükleyin.'}
           </li>
         )}
         {docs.map((doc) => (

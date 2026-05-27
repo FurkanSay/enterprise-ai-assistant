@@ -32,6 +32,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 mod config;
 mod consumer;
 mod db;
+mod deletion_consumer;
 mod embedder;
 mod event;
 mod pipeline;
@@ -41,6 +42,7 @@ mod vector_store;
 use crate::config::Config;
 use crate::consumer::Consumer;
 use crate::db::Db;
+use crate::deletion_consumer::DeletionConsumer;
 use crate::embedder::Embedder;
 use crate::pipeline::Pipeline;
 use crate::storage::ObjectStore;
@@ -90,6 +92,11 @@ async fn main() -> Result<()> {
     // for ingest, the other is exposed on /embed for query-side reuse.
     // `Embedder` wraps Arc<TextEmbedding>, so this clone is cheap.
     let embedder_for_http = embedder.clone();
+    // The deletion consumer needs its own handles to qdrant + bm25; both
+    // wrap Arc internally so cloning is cheap and writes from either path
+    // converge on the same backing store.
+    let qdrant_for_deletion = qdrant.clone();
+    let bm25_for_deletion = bm25.clone();
     let pipeline = Pipeline::new(storage, embedder, qdrant, bm25, db);
 
     let ready = Arc::new(AtomicBool::new(false));
@@ -104,6 +111,18 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         if let Err(e) = consumer.run(pipeline).await {
             error!(error = %e, "consumer.run.exited");
+        }
+    });
+
+    // Deletion consumer — tails doc.deleted.v1 and purges Qdrant + tantivy
+    // entries so search never surfaces orphan chunks. Runs alongside the
+    // upload consumer with an independent Redis connection + group.
+    let deletion_consumer = DeletionConsumer::connect(&cfg, qdrant_for_deletion, bm25_for_deletion)
+        .await
+        .context("deletion consumer connect")?;
+    tokio::spawn(async move {
+        if let Err(e) = deletion_consumer.run().await {
+            error!(error = %e, "deletion_consumer.run.exited");
         }
     });
 

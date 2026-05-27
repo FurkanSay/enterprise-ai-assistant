@@ -61,7 +61,16 @@ export default function ChatPage() {
         // honest avoids confused users.
         setMode((detail.mode as 'normal' | 'deep_search') || 'normal');
         setMessages(
-          detail.messages.map((m) => ({ role: m.role, text: m.text })),
+          detail.messages.map((m) => ({
+            role: m.role,
+            text: m.text,
+            // Reconstruct toolResults from persisted blocks so paper
+            // cards reappear when reopening an old Deep Search session.
+            toolResults: (m.tool_results ?? []).map((tr) => ({
+              kind: tr.kind,
+              data: tr.data,
+            })),
+          })),
         );
       } catch (e) {
         if (e instanceof UnauthenticatedError) {

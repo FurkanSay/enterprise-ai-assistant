@@ -42,16 +42,38 @@ class ForkSessionRequest(BaseModel):
     up_to_message_id: str | None = None
 
 
+class SessionToolResult(BaseModel):
+    """Parsed tool_result payload attached to an assistant message.
+
+    The agent persists `tool_use` blocks on assistant rows and
+    `tool_result` blocks on `role=tool` rows. We collate them server-side
+    so the frontend gets a single, flat structure per assistant turn —
+    matching the shape the live SSE stream produces. This is what makes
+    paper cards reappear when an old Deep Search session is reopened.
+    """
+
+    kind: str  # "paper_list" | "paper_ingested" | other ui_kind values
+    data: dict
+
+
 class SessionMessage(BaseModel):
     id: str
     role: str
     text: str
     sequence_number: int
     created_at: str
+    tool_results: list[SessionToolResult] = []
 
 
 class SessionDetail(SessionSummary):
     messages: list[SessionMessage]
+
+
+def _is_internal_user_message(text: str) -> bool:
+    """Hide synthetic user turns the UI created (legacy ACTION:ADD_PAPER
+    flow). They are still on disk for audit but should not pollute the
+    rendered conversation."""
+    return text.lstrip().startswith("[ACTION:ADD_PAPER]")
 
 
 def _summary(s) -> SessionSummary:  # type: ignore[no-untyped-def]
@@ -92,26 +114,87 @@ async def get_session_endpoint(session_id: str) -> SessionDetail:
             raise HTTPException(status_code=404, detail="session not found")
         messages = await list_messages(db, session_uuid)
 
+    # Build the flat history. Walk messages in sequence order; assistant
+    # rows accumulate their tool_result payloads from the immediately
+    # following `role=tool` rows (which the agent loop persists separately).
+    import orjson as _orjson
+
     flat_messages: list[SessionMessage] = []
+    last_assistant_idx: int | None = None
+
     for m in messages:
-        # `Message.role` is stored as the enum *value* (a string) because
-        # state.Message uses `use_enum_values=True`. So comparisons and
-        # serialisation both go through the raw string — no .value access.
         role_str = m.role if isinstance(m.role, str) else m.role.value
+
+        if role_str == "tool":
+            # Tool result rows attach to the most recent assistant turn.
+            if last_assistant_idx is None:
+                continue
+            host = flat_messages[last_assistant_idx]
+            for block in m.blocks:
+                if block.type != "tool_result" or not block.tool_output:
+                    continue
+                try:
+                    payload = _orjson.loads(block.tool_output)
+                except Exception:
+                    continue
+                if not isinstance(payload, dict):
+                    continue
+                kind = payload.get("ui_kind")
+                if kind in ("paper_list", "paper_ingested"):
+                    host.tool_results.append(
+                        SessionToolResult(kind=kind, data=payload)
+                    )
+            continue
+
         if role_str not in ("user", "assistant"):
             continue
+
         text = "\n".join(b.text for b in m.blocks if b.type == "text" and b.text)
-        if not text:
-            continue
-        flat_messages.append(
-            SessionMessage(
-                id=m.id,
-                role=role_str,
-                text=text,
-                sequence_number=m.sequence_number,
-                created_at=m.created_at.isoformat(),
+        if role_str == "user":
+            if _is_internal_user_message(text):
+                # Legacy synthetic UI message — don't pollute the render.
+                last_assistant_idx = None
+                continue
+            if not text:
+                continue
+            flat_messages.append(
+                SessionMessage(
+                    id=m.id,
+                    role="user",
+                    text=text,
+                    sequence_number=m.sequence_number,
+                    created_at=m.created_at.isoformat(),
+                )
             )
+            last_assistant_idx = None
+            continue
+
+        # assistant
+        assistant = SessionMessage(
+            id=m.id,
+            role="assistant",
+            text=text,
+            sequence_number=m.sequence_number,
+            created_at=m.created_at.isoformat(),
         )
+        # Assistant turn may carry tool_result blocks INLINE (deep_search
+        # bypass persists them this way to avoid a separate tool row).
+        for block in m.blocks:
+            if block.type != "tool_result" or not block.tool_output:
+                continue
+            try:
+                payload = _orjson.loads(block.tool_output)
+            except Exception:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            kind = payload.get("ui_kind")
+            if kind in ("paper_list", "paper_ingested"):
+                assistant.tool_results.append(
+                    SessionToolResult(kind=kind, data=payload)
+                )
+        flat_messages.append(assistant)
+        last_assistant_idx = len(flat_messages) - 1
 
     return SessionDetail(
         id=session.id,

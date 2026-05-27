@@ -97,10 +97,21 @@ export interface DocumentSummary {
   chunkCount: number;
   createdAt: string;
   updatedAt: string;
+  // Populated when the document came from Deep Search auto-ingest.
+  sourceSessionId?: string | null;
+  sourcePaperDoi?: string | null;
+  sourcePaperTitle?: string | null;
 }
 
-export async function listDocuments(): Promise<DocumentSummary[]> {
-  const res = await authedFetch(`/api/v1/documents`);
+export async function listDocuments(
+  options: { sourceSessionId?: string } = {},
+): Promise<DocumentSummary[]> {
+  const params = new URLSearchParams();
+  if (options.sourceSessionId) {
+    params.set('source_session_id', options.sourceSessionId);
+  }
+  const qs = params.toString();
+  const res = await authedFetch(`/api/v1/documents${qs ? '?' + qs : ''}`);
   if (!res.ok) throw new Error(`list documents failed: ${res.status}`);
   const body = await res.json();
   return body.items ?? [];
@@ -132,12 +143,18 @@ export interface SessionSummary {
   mode?: 'normal' | 'deep_search';
 }
 
+export interface SessionToolResult {
+  kind: string; // "paper_list" | "paper_ingested"
+  data: Record<string, unknown>;
+}
+
 export interface SessionMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
   sequence_number: number;
   created_at: string;
+  tool_results?: SessionToolResult[];
 }
 
 export interface SessionDetail extends SessionSummary {

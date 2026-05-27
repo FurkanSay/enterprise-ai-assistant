@@ -195,12 +195,36 @@ async def _deep_search_stream(
         )
         yield "token", {"text": confirmation}
 
+        # Persist the full assistant turn: a tool_use block (synthetic,
+        # matches what the LLM path would emit), a tool_result block
+        # carrying the paper_list payload, and the confirmation text.
+        # The sessions GET endpoint reassembles these into the same
+        # toolResults shape the live SSE stream produces, so paper
+        # cards reappear when the session is reopened later.
         await append_message(
             db,
             tenant,
             session_uuid,
             role=MessageRole.ASSISTANT,
-            blocks=[ContentBlock(type="text", text=confirmation)],
+            blocks=[
+                ContentBlock(
+                    type="tool_use",
+                    tool_use_id="deep_search_direct",
+                    tool_name="literature_search",
+                    tool_input={
+                        "query": query,
+                        "max_results": max_results,
+                        "year_from": year_from,
+                    },
+                ),
+                ContentBlock(
+                    type="tool_result",
+                    tool_result_for_id="deep_search_direct",
+                    tool_output=orjson.dumps(tool_payload).decode("utf-8"),
+                    is_error=False,
+                ),
+                ContentBlock(type="text", text=confirmation),
+            ],
         )
 
         yield "done", {
