@@ -1,0 +1,218 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "uid": "kai-token-usage",
+  "title": "KAI — Token usage & platform stats",
+  "description": "Cross-tenant view of who's using the platform and how many model tokens they've burned. Source: aiengine_schema.messages.token_usage (per-assistant-turn JSONB).",
+  "tags": ["kai", "platform", "admin"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "weekStart": "",
+  "refresh": "30s",
+  "time": { "from": "now-30d", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Toplam kullanıcı",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "kai-postgres" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [] } },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "kai-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM identity_schema.users;"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Aktif oturum",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "kai-postgres" },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "kai-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM aiengine_schema.sessions WHERE archived_at IS NULL;"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Asistan mesajı",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "kai-postgres" },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "kai-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM aiengine_schema.messages WHERE role = 'assistant';"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Doküman",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "kai-postgres" },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "kai-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM documents_schema.documents;"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Toplam token (input + output)",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "kai-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "kai-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COALESCE(sum((token_usage->>'input_tokens')::bigint + (token_usage->>'output_tokens')::bigint), 0) AS value FROM aiengine_schema.messages WHERE token_usage IS NOT NULL;"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Günlük token kullanımı",
+      "description": "input vs output token, stacked. created_at saatine göre günlük toplam.",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "kai-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal", "group": "A" }
+          },
+          "unit": "short"
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "kai-postgres" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('day', created_at) AS time, sum((token_usage->>'input_tokens')::bigint) AS input, sum((token_usage->>'output_tokens')::bigint) AS output FROM aiengine_schema.messages WHERE $__timeFilter(created_at) AND token_usage IS NOT NULL GROUP BY 1 ORDER BY 1;"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "piechart",
+      "title": "Model bazında token",
+      "description": "Hangi model ne kadar token harcamış? session.model üzerinden grupluyor — deep_search yolu bypass olduğu için kendi etiketiyle gözükür.",
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "kai-postgres" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": {
+        "displayLabels": ["percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value"] },
+        "pieType": "donut"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "kai-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT s.model AS metric, sum((m.token_usage->>'input_tokens')::bigint + (m.token_usage->>'output_tokens')::bigint) AS value FROM aiengine_schema.messages m JOIN aiengine_schema.sessions s ON m.session_id = s.id WHERE $__timeFilter(m.created_at) AND m.token_usage IS NOT NULL GROUP BY s.model ORDER BY 2 DESC;"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Kullanıcı sıralaması — token harcaması",
+      "description": "Tenant farketmeksizin platform genelinde en aktif kullanıcılar.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 13 },
+      "datasource": { "type": "postgres", "uid": "kai-postgres" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "total_tokens" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } },
+              { "id": "unit", "value": "short" }
+            ]}
+        ]
+      },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "kai-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT u.email, count(DISTINCT s.id) AS sessions, count(m.id) FILTER (WHERE m.role='assistant') AS msgs, COALESCE(sum((m.token_usage->>'input_tokens')::bigint), 0) AS input_tokens, COALESCE(sum((m.token_usage->>'output_tokens')::bigint), 0) AS output_tokens, COALESCE(sum((m.token_usage->>'input_tokens')::bigint + (m.token_usage->>'output_tokens')::bigint), 0) AS total_tokens FROM identity_schema.users u LEFT JOIN aiengine_schema.sessions s ON s.user_id = u.id LEFT JOIN aiengine_schema.messages m ON m.session_id = s.id WHERE m.created_at IS NULL OR $__timeFilter(m.created_at) GROUP BY u.email ORDER BY total_tokens DESC;"
+        }
+      ]
+    }
+  ]
+}

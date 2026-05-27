@@ -13,3 +13,20 @@ datasources:
     access: proxy
     url: http://jaeger:16686
     editable: true
+
+  # Read-only access to all schemas for the platform-admin dashboard.
+  # platform_admin has BYPASSRLS so cross-tenant aggregates work; this
+  # connection should ONLY be used by trusted operators.
+  - name: KAI Postgres
+    uid: kai-postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: platform_admin
+    secureJsonData:
+      password: admin_dev_pwd
+    jsonData:
+      database: kai
+      sslmode: disable
+      postgresVersion: 1600
+    editable: true

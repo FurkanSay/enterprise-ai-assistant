@@ -41,7 +41,17 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA aiengine_schema
 GRANT USAGE ON SCHEMA identity_schema TO aiengine_user;
 GRANT SELECT ON identity_schema.tenants TO aiengine_user;
 
--- Admin reaches everywhere
+-- Admin reaches everywhere. USAGE on the schema is mandatory in addition
+-- to table grants — without it, even SELECT errors with "permission denied
+-- for schema". The Grafana dashboard reads through this role.
+GRANT USAGE ON SCHEMA identity_schema  TO platform_admin;
+GRANT USAGE ON SCHEMA documents_schema TO platform_admin;
+GRANT USAGE ON SCHEMA aiengine_schema  TO platform_admin;
 GRANT ALL ON ALL TABLES IN SCHEMA identity_schema  TO platform_admin;
 GRANT ALL ON ALL TABLES IN SCHEMA documents_schema TO platform_admin;
 GRANT ALL ON ALL TABLES IN SCHEMA aiengine_schema  TO platform_admin;
+-- Future tables (added by later init scripts in the same DB boot) inherit
+-- the same grant without a manual GRANT step.
+ALTER DEFAULT PRIVILEGES IN SCHEMA identity_schema  GRANT ALL ON TABLES TO platform_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA documents_schema GRANT ALL ON TABLES TO platform_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA aiengine_schema  GRANT ALL ON TABLES TO platform_admin;
