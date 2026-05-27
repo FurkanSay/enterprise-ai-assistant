@@ -1,16 +1,20 @@
 /**
- * Browser-side auth state — access token + decoded JWT claims in localStorage.
+ * Browser-side auth state — access token + refresh token + decoded JWT
+ * claims in localStorage.
  *
  * Trade-offs:
  *   - localStorage is XSS-readable. Acceptable for this stage because the
  *     project is a demo/portfolio. A production cut would migrate to
- *     httpOnly cookies + a /api/v1/auth/refresh endpoint.
- *   - Access tokens live 15min (per Identity's JwtOptions). Refresh tokens
- *     are issued at login but not yet rotated automatically — when the
- *     access token expires the user is sent to /login again.
+ *     httpOnly cookies for the refresh token.
+ *   - Access tokens live 15min (per Identity's JwtOptions). When a 401
+ *     comes back the api-client swaps the refresh token at
+ *     /api/v1/auth/refresh and retries the original request once — see
+ *     `authedFetch` in api-client.ts. Rotation is single-use: every
+ *     refresh revokes the prior token and mints a new one.
  */
 
 const ACCESS_KEY = 'kai.access';
+const REFRESH_KEY = 'kai.refresh';
 const USER_KEY = 'kai.user';
 
 export interface AuthUser {
@@ -33,13 +37,26 @@ export function saveSession(loginResponse: LoginResponse): AuthUser {
   }
   const user = decodeUserFromJwt(loginResponse.accessToken);
   localStorage.setItem(ACCESS_KEY, loginResponse.accessToken);
+  localStorage.setItem(REFRESH_KEY, loginResponse.refreshToken);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
+}
+
+/** Replace just the tokens after a refresh — keep the same user info. */
+export function updateTokens(accessToken: string, refreshToken: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ACCESS_KEY, accessToken);
+  localStorage.setItem(REFRESH_KEY, refreshToken);
 }
 
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(ACCESS_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(REFRESH_KEY);
 }
 
 export function getCurrentUser(): AuthUser | null {
@@ -56,6 +73,7 @@ export function getCurrentUser(): AuthUser | null {
 export function clearSession(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(ACCESS_KEY);
+  localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(USER_KEY);
 }
 

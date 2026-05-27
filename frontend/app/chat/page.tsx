@@ -12,10 +12,16 @@ import { SessionSidebar } from '@/components/session-sidebar';
 import {
   forkSession,
   getSession,
+  logout,
   sendChat,
   UnauthenticatedError,
 } from '@/lib/api-client';
-import { clearSession, getCurrentUser, type AuthUser } from '@/lib/auth';
+import {
+  clearSession,
+  getCurrentUser,
+  getRefreshToken,
+  type AuthUser,
+} from '@/lib/auth';
 
 // Skip static prerender — page is gated on a localStorage token that
 // only exists in the browser. Next 15.1's SSG path also has an internal
@@ -280,7 +286,11 @@ export default function ChatPage() {
     }
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    // Revoke the refresh token server-side so a leaked copy stops
+    // working immediately, then wipe local state and bounce to /login.
+    const rt = getRefreshToken();
+    if (rt) await logout(rt);
     clearSession();
     router.push('/login');
   }

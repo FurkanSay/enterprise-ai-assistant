@@ -72,6 +72,10 @@ CREATE TABLE IF NOT EXISTS identity_schema.refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON identity_schema.refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_tenant ON identity_schema.refresh_tokens(tenant_id);
+-- Refresh lookups happen by hash on every token rotation; without this
+-- the path is a full scan as the table grows.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_refresh_tokens_token_hash
+    ON identity_schema.refresh_tokens(token_hash);
 
 ALTER TABLE identity_schema.refresh_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE identity_schema.refresh_tokens FORCE ROW LEVEL SECURITY;

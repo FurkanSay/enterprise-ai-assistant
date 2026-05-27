@@ -17,11 +17,17 @@ import { Filter, Trash2, X } from 'lucide-react';
 import {
   deleteDocument,
   listDocuments,
+  logout,
   uploadDocument,
   UnauthenticatedError,
   type DocumentSummary,
 } from '@/lib/api-client';
-import { clearSession, getCurrentUser, type AuthUser } from '@/lib/auth';
+import {
+  clearSession,
+  getCurrentUser,
+  getRefreshToken,
+  type AuthUser,
+} from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -171,7 +177,9 @@ function DocumentsPageInner() {
     }
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    const rt = getRefreshToken();
+    if (rt) await logout(rt);
     clearSession();
     router.push('/login');
   }

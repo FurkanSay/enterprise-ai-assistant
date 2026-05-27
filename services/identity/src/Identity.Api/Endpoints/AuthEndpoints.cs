@@ -1,6 +1,8 @@
 using FluentValidation;
 using Identity.Application.Auth.Login;
+using Identity.Application.Auth.Logout;
 using Identity.Application.Auth.Me;
+using Identity.Application.Auth.Refresh;
 using Identity.Application.Auth.Register;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -63,6 +65,56 @@ public static class AuthEndpoints
                     title: "Invalid credentials",
                     detail: "Email or password is incorrect.");
             }
+        });
+
+        // ── POST /v1/auth/refresh ───────────────────────────────────────
+        // Anonymous. The body carries the refresh token; we don't trust
+        // the access token here because it may already be expired (that's
+        // the whole point of refreshing).
+        group.MapPost("/refresh", async (
+            RefreshTokenCommand command,
+            ISender mediator,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var response = await mediator.Send(command, ct);
+                return Results.Ok(response);
+            }
+            catch (ValidationException ex)
+            {
+                return Results.ValidationProblem(
+                    ex.Errors.GroupBy(e => e.PropertyName)
+                             .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray()));
+            }
+            catch (InvalidRefreshTokenException ex)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Invalid refresh token",
+                    detail: ex.Message);
+            }
+        });
+
+        // ── POST /v1/auth/logout ────────────────────────────────────────
+        // Anonymous + idempotent. Always returns 204 — never reveals
+        // whether the token was real, prevents log probing for valid
+        // refresh tokens.
+        group.MapPost("/logout", async (
+            LogoutCommand command,
+            ISender mediator,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                await mediator.Send(command, ct);
+            }
+            catch (ValidationException)
+            {
+                // Empty token body — still treat as success; the client
+                // either way has nothing to revoke.
+            }
+            return Results.NoContent();
         });
 
         // ── GET /v1/auth/me ─────────────────────────────────────────────

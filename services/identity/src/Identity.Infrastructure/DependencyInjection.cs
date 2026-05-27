@@ -20,6 +20,7 @@ public static class DependencyInjection
                 npg => npg.MigrationsHistoryTable("__ef_migrations", "identity_schema")));
 
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
 
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));

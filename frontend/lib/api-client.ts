@@ -7,7 +7,12 @@
  * yielded as an async iterable.
  */
 
-import { getAccessToken, clearSession } from './auth';
+import {
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  updateTokens,
+} from './auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -16,6 +21,51 @@ export class UnauthenticatedError extends Error {
     super('Not authenticated');
     this.name = 'UnauthenticatedError';
   }
+}
+
+// In-flight refresh promise so 5 simultaneous 401s share ONE network
+// round-trip. Without this, the first refresh rotates the token, the
+// other four hit the now-revoked one and bounce the user to /login.
+let pendingRefresh: Promise<string | null> | null = null;
+
+/**
+ * Single-flight refresh. Returns the new access token, or null if the
+ * refresh itself failed (revoked, expired, or no refresh token stored).
+ * On failure, the session is wiped — the caller should treat this as
+ * "user is logged out."
+ */
+async function refreshAccessToken(): Promise<string | null> {
+  if (pendingRefresh) return pendingRefresh;
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  pendingRefresh = (async (): Promise<string | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) {
+        clearSession();
+        return null;
+      }
+      const body = await res.json();
+      if (!body.accessToken || !body.refreshToken) {
+        clearSession();
+        return null;
+      }
+      updateTokens(body.accessToken, body.refreshToken);
+      return body.accessToken as string;
+    } catch {
+      clearSession();
+      return null;
+    } finally {
+      pendingRefresh = null;
+    }
+  })();
+
+  return pendingRefresh;
 }
 
 export interface ChatStreamEvent {
@@ -37,11 +87,37 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${token}` };
 }
 
+/**
+ * Run a request, and if it 401s once, try refreshing and re-running ONCE.
+ * Streaming requests pass `init.body` as a ReadableStream or FormData,
+ * neither of which are consumed twice safely — for those, callers should
+ * use the dedicated SSE path (which handles 401 itself).
+ */
 async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: { ...(init.headers ?? {}), ...authHeaders() },
-  });
+  const exec = async (token: string): Promise<Response> =>
+    fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: {
+        ...(init.headers ?? {}),
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+  const token = getAccessToken();
+  if (!token) throw new UnauthenticatedError();
+
+  let res = await exec(token);
+  if (res.status !== 401) return res;
+
+  // Try refreshing exactly once. If it succeeds, retry the same request
+  // with the new token; if it fails, surface UnauthenticatedError so
+  // page guards can redirect to /login.
+  const refreshed = await refreshAccessToken();
+  if (!refreshed) {
+    clearSession();
+    throw new UnauthenticatedError();
+  }
+  res = await exec(refreshed);
   if (res.status === 401) {
     clearSession();
     throw new UnauthenticatedError();
@@ -70,6 +146,23 @@ export async function register(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tenantId, email, password, displayName }),
   });
+}
+
+/**
+ * Best-effort logout — revokes the refresh token server-side. Network
+ * errors are swallowed because the caller still wants the local session
+ * gone regardless. Idempotent on the server.
+ */
+export async function logout(refreshToken: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+  } catch {
+    // ignore — local clearSession() in the caller still happens
+  }
 }
 
 export async function fetchMe(): Promise<{
@@ -215,24 +308,38 @@ export async function* sendChat(
     mode?: 'normal' | 'deep_search';
   } = {},
 ): AsyncGenerator<ChatStreamEvent> {
-  const response = await fetch(`${API_BASE}/api/v1/chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      ...authHeaders(),
-    },
-    body: JSON.stringify({
-      message,
-      mode: options.mode ?? 'normal',
-      session_id: options.sessionId,
-      model: options.model,
-    }),
+  const body = JSON.stringify({
+    message,
+    mode: options.mode ?? 'normal',
+    session_id: options.sessionId,
+    model: options.model,
   });
+  const post = (token: string) =>
+    fetch(`${API_BASE}/api/v1/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${token}`,
+      },
+      body,
+    });
 
+  const token = getAccessToken();
+  if (!token) throw new UnauthenticatedError();
+  let response = await post(token);
   if (response.status === 401) {
-    clearSession();
-    throw new UnauthenticatedError();
+    // Try one refresh, then retry with the fresh access token.
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) {
+      clearSession();
+      throw new UnauthenticatedError();
+    }
+    response = await post(refreshed);
+    if (response.status === 401) {
+      clearSession();
+      throw new UnauthenticatedError();
+    }
   }
   if (!response.ok || !response.body) {
     throw new Error(`Chat request failed: ${response.status}`);
