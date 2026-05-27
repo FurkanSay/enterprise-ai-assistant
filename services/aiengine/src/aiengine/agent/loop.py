@@ -48,16 +48,42 @@ log = structlog.get_logger(__name__)
 SYSTEM_PROMPT_NORMAL = (
     "You are the Enterprise AI Assistant for a multi-tenant platform.\n"
     "\n"
-    "You have access to a `doc_search` tool that retrieves passages from the "
-    "current tenant's uploaded documents. Whenever the user asks about "
-    "anything that could plausibly be in their own files — a person, "
-    "a project, a CV, a policy, an internal document — call `doc_search` "
-    "FIRST with a focused query, then ground your answer in the returned "
-    "passages. If the search returns nothing relevant, say so honestly "
-    "rather than guessing.\n"
+    "CRITICAL TOOL POLICY — read carefully and follow exactly:\n"
     "\n"
-    "When citing, reference the document by name or source_location from "
-    "the tool result. Keep answers concise. Reply in the user's language."
+    "1. You MUST call `doc_search` BEFORE answering any substantive\n"
+    "   question. Do not 'check if I should search' — always search\n"
+    "   first. The user's documents are in a vector store you can\n"
+    "   only see by calling this tool.\n"
+    "\n"
+    "2. NEVER answer from your training knowledge when the question\n"
+    "   is even loosely about something that could be in a document —\n"
+    "   technical comparisons, summaries, methodology, citations,\n"
+    "   anything subject-matter. Even if you know the answer in\n"
+    "   general, the user uploaded papers specifically to ground\n"
+    "   YOUR answer in THEIR sources. Calling doc_search is the\n"
+    "   whole job.\n"
+    "\n"
+    "3. NEVER claim 'RAG is not enabled' or 'I only see metadata' or\n"
+    "   'I cannot access the full text'. doc_search returns full\n"
+    "   chunk text from the documents. If you have not called it,\n"
+    "   you have not tried.\n"
+    "\n"
+    "4. The query passed to doc_search should be in English even if\n"
+    "   the user wrote Turkish — abstracts in the index are mostly\n"
+    "   English. Use technical terms (BM25, dense retrieval, vector\n"
+    "   database, etc.) rather than restating the whole question.\n"
+    "\n"
+    "5. If a search returns zero relevant chunks, say so honestly:\n"
+    "   'Eklediğiniz kaynaklarda bu konuya dair pasaj bulamadım.'\n"
+    "   Don't fall back to general knowledge.\n"
+    "\n"
+    "6. When citing, reference the document by name or source_location\n"
+    "   from the tool result.\n"
+    "\n"
+    "Only exception to (1): pure social messages (hi / thanks / who\n"
+    "are you) — those don't need a search.\n"
+    "\n"
+    "Reply in the user's language. Keep answers concise but cite."
 )
 
 SYSTEM_PROMPT_DEEP_SEARCH = (
@@ -144,17 +170,13 @@ async def run_turn(
             session = await get_session(db, session_uuid)
             if session is None:
                 raise NotFoundError(f"Session {session_id} not found")
-            # Persisted session mode trumps the caller's mode — the
-            # frontend forces a fresh session on mode-switch, so an
-            # existing session always carries the mode it was born with.
-            mode = session.mode or mode
-            system_prompt = (
-                SYSTEM_PROMPT_DEEP_SEARCH if mode == "deep_search" else SYSTEM_PROMPT_NORMAL
-            )
-            mode_tools = TOOLS_BY_MODE.get(mode, TOOLS_BY_MODE["normal"])
-            allowed_tools = (
-                [t for t in (allowed_tools or mode_tools) if t in mode_tools]
-            )
+            # Caller mode wins. The session row records the mode it was
+            # BORN in (so the sidebar can label it), but the toolset for
+            # *this* turn comes from req.mode. That way a user who
+            # opened an old deep_search session and just wants to ask a
+            # follow-up question about already-ingested papers can do
+            # so without manually starting a fresh chat — the frontend
+            # passes mode=normal and we hand the agent doc_search.
         else:
             session = await create_session(
                 db, tenant, title=user_message[:80], model=model, mode=mode,
