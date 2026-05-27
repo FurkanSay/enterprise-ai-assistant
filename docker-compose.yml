@@ -136,6 +136,8 @@ services:
       - "8080:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      # Same value as Identity's Jwt__SigningKey. HS256 = shared secret.
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-dev-only-shared-secret-rotate-in-prod-must-be-at-least-32-bytes}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
       identity:
@@ -154,7 +156,12 @@ services:
       - "8081:8081"
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      # Identity is the tenant authority — login must look up users by
+      # email across all tenants, which would loop with RLS. We connect
+      # as kai (BYPASSRLS) on purpose. RLS still protects every other
+      # service that talks to the DB.
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-kai};Username=${POSTGRES_USER:-kai};Password=${POSTGRES_PASSWORD:-kai_dev_pwd};Search Path=identity_schema
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-dev-only-shared-secret-rotate-in-prod-must-be-at-least-32-bytes}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
       postgres:
