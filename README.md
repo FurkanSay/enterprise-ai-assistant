@@ -4,8 +4,9 @@
 
 A multi-tenant retrieval-augmented AI assistant platform, built as a polyglot microservices monorepo across **C#, Java, Rust, Python, and TypeScript**.
 
-[![Phase](https://img.shields.io/badge/phase-A%20Skeleton-success?style=flat-square)](./ROADMAP.md)
-[![Next](https://img.shields.io/badge/next-B%20Code--gen%20%26%20DB-blue?style=flat-square)](./ROADMAP.md#phase-b--code-gen--db-foundation-)
+[![Phase](https://img.shields.io/badge/phase-M%20Polish-success?style=flat-square)](./ROADMAP.md)
+[![Auth](https://img.shields.io/badge/auth-refresh--token%20rotation-success?style=flat-square)](./ROADMAP.md#refresh-token-flow-)
+[![Observability](https://img.shields.io/badge/observability-admin%20dashboard-success?style=flat-square)](./ROADMAP.md#admin-grafana-dashboard-)
 [![License](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](./LICENSE)
 
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white&style=flat-square)
@@ -24,7 +25,7 @@ A multi-tenant retrieval-augmented AI assistant platform, built as a polyglot mi
 
 </div>
 
-> Phase A (skeleton) is complete. Service business logic is being filled in phase by phase. Progress is tracked in [ROADMAP.md](./ROADMAP.md); `main` is kept buildable on every commit.
+> Phases A through M are complete: skeleton, code-gen, real RAG pipeline, JWT + refresh-token rotation, document ingestion, agent loop with tool registry, Deep Search literature mode, conversation forking, hybrid retrieval, and an admin observability dashboard. Progress is tracked in [ROADMAP.md](./ROADMAP.md); `main` is kept buildable on every commit.
 
 ---
 
@@ -142,18 +143,32 @@ Endpoints:
 | Frontend | http://localhost:3000 |
 | Gateway (API) | http://localhost:8080 |
 | Jaeger (distributed traces) | http://localhost:16686 |
-| Grafana | http://localhost:3001 |
+| Grafana | http://localhost:3001 (admin/admin) — token-usage dashboard at `/d/kai-token-usage` |
 | MinIO console | http://localhost:9001 |
 
 ### Demo flow
 
 1. Open http://localhost:3000 → **Kayıt ol**, pick any email + password.
-2. Log in. You're redirected to **/chat**.
+2. Log in. You're redirected to **/chat**. The session keeps refreshing
+   its access token in the background — leave the tab open for hours,
+   it stays signed in.
 3. Click **Dokümanlar** in the header → upload a `.txt` / `.pdf` / `.docx`.
 4. Watch the status badge progress UPLOADED → PARSING → CHUNKING →
-   EMBEDDING → READY (~2-5 seconds on a small file).
-5. Back to **Sohbet**. Ask the assistant something about the document.
-   Tokens stream in token-by-token.
+   EMBEDDING → READY (~2-5 seconds on a small file). Deleting the
+   row also purges the matching Qdrant points and tantivy entries.
+5. Back to **Sohbet**. Ask the assistant something about the document —
+   tokens stream in. Reasoning models drop a separate "thinking" panel
+   while they cogitate; large pasted text shows as a clickable card.
+6. Toggle **Deep Search** in the chat input → ask "find 10 papers on
+   vector database benchmarks after 2023." The aggregator hits
+   OpenAlex / Semantic Scholar / arXiv in parallel, dedupes by DOI,
+   auto-ingests every hit into your RAG collection, and tags each
+   document with `source_session_id` so the Documents page can filter
+   "only papers from this chat".
+7. (Operator) Open http://localhost:3001 (admin / admin) → **KAI →
+   Token usage & platform stats**. Shows per-user token spend, model
+   distribution, daily input/output bars, and total documents — all
+   driven by `messages.token_usage` JSONB and `platform_admin` (BYPASSRLS).
 
 ### End-to-end smoke (one-shot)
 
@@ -202,6 +217,12 @@ enterprise-ai-assistant/
 | G | Realtime WebSocket auth, Redis pub/sub fanout from AI Engine | Done |
 | H | Frontend chat UI (Next.js, JWT auth, SSE streaming, doc upload) | Done |
 | I | End-to-end smoke script + observability polish | Done |
+| J | Grounded RAG with citations + sessions + conversation forking + paste-attachment chips | Done |
+| K | Chunker UTF-8 panic guard + reasoning-model thinking panel + typewriter dripping | Done |
+| L | Deep Search literature mode: OpenAlex / Semantic Scholar / arXiv aggregator + auto-ingest + source-tagging | Done |
+| M | Cards-on-reload, Documents `?source_session_id=` filter, `doc.deleted.v1` consumer (Qdrant + tantivy cleanup) | Done |
+| — | Refresh-token rotation (single-use) + `/logout` revoke + frontend single-flight retry | Done |
+| — | Admin Grafana dashboard: cross-tenant token usage + per-model + per-user | Done |
 
 Detailed plan and working agreements: [ROADMAP.md](./ROADMAP.md).
 

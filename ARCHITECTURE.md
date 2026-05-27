@@ -11,8 +11,11 @@ Bu doküman teknik kararları derinlemesine açıklar. Üst seviye genel bakış
 - [Veri katmanı](#veri-katmanı)
 - [Observability](#observability)
 - [Güvenlik modeli](#güvenlik-modeli)
+- [Auth: access + refresh token rotation](#auth-access--refresh-token-rotation)
 - [RAG pipeline](#rag-pipeline)
 - [Agent loop (AI Engine)](#agent-loop-ai-engine)
+- [Deep Search (LLM-bypass literature mode)](#deep-search-llm-bypass-literature-mode)
+- [Admin observability dashboard](#admin-observability-dashboard)
 
 ## Tasarım prensipleri
 
@@ -200,6 +203,54 @@ GRANT USAGE ON SCHEMA identity_schema TO identity_user;
 | LLM access | Tenant-scoped quota + content moderation hooks |
 | Audit | Tool calls + document access logged with trace_id |
 
+## Auth: access + refresh token rotation
+
+İki tokenli akış; access kısa ömürlü (15dk), refresh uzun ömürlü (30g).
+
+```
+[1] LOGIN
+  Browser --POST /api/v1/auth/login--> Gateway --> Identity
+  Identity:
+    BCrypt verify → ITokenService.Issue(user, roles)
+    fresh access JWT (15dk) + 64-byte random refresh
+    INSERT refresh_tokens (token_hash = SHA-256(refresh), expires_at=+30g)
+  Identity --200 { accessToken, refreshToken, expiresAt }--> Browser
+  Browser: localStorage[kai.access] + localStorage[kai.refresh]
+
+[2] NORMAL REQUEST (access henüz geçerli)
+  Browser --Bearer access--> Gateway
+  Gateway: HS256 signature + issuer + audience + lifetime check → forward
+
+[3] ACCESS EXPIRED (401)
+  Gateway --401--> Browser
+  api-client.authedFetch:
+    pendingRefresh ??= POST /api/v1/auth/refresh { refreshToken }
+    Identity:
+      hash = SHA-256(refreshToken)
+      row = SELECT … WHERE token_hash = $1
+      IF !row OR row.revoked_at IS NOT NULL OR row.expires_at < NOW() → 401
+      row.Revoke(); INSERT new_row; SaveChanges() (tek tx)
+    Identity --200 { new_access, new_refresh }--> Browser
+    Browser: updateTokens(new_access, new_refresh)
+    api-client: retry original request with new_access (exactly once)
+
+[4] LOGOUT
+  Browser --POST /api/v1/auth/logout { refreshToken }--> Identity
+  Identity: row.Revoke() (idempotent); 204
+  Browser: clearSession() (localStorage wipe)
+```
+
+**Single-use rotation**: Her refresh atomic olarak eskisini `revoked_at = NOW()` yapar, yenisini INSERT eder. Aynı refresh ikinci kez kullanılırsa (replay) 401 dönüyor — sahibi token çalındığını anlıyor (üretim sertleştirme adımı: tüm user token'larını revoke et).
+
+**Single-flight on the client**: 5 eşzamanlı 401 → ONE refresh round-trip; yarış koşulunda ilk refresh rotate ederse diğer 4 retry zaten yeni token'la giderdi. `let pendingRefresh: Promise<…> | null` ref'i bu yarışı tek promise'e indiriyor.
+
+**Hash-on-store**: DB sızsa bile token gizli kalır. 64 random byte input için SHA-256 brute-force infeasible — salt gereksiz.
+
+Detay:
+- Domain: [services/identity/src/Identity.Domain/Entities/RefreshToken.cs](./services/identity/src/Identity.Domain/Entities/RefreshToken.cs)
+- Endpoints: [services/identity/src/Identity.Api/Endpoints/AuthEndpoints.cs](./services/identity/src/Identity.Api/Endpoints/AuthEndpoints.cs)
+- Client retry: [frontend/lib/api-client.ts](./frontend/lib/api-client.ts) (`refreshAccessToken` + `authedFetch`)
+
 ## RAG pipeline
 
 Detay: [docs/mvp-tools/](./docs/mvp-tools/) altında ayrı not.
@@ -244,3 +295,60 @@ Tool katmanı:
 - **MCP tools** (opsiyonel): Üçüncü taraf entegrasyonlar
 
 Referans olarak Claude Code internals analizinden çıkarılan notlar: [docs/claw-learnings/](./docs/claw-learnings/)
+
+## Deep Search (LLM-bypass literature mode)
+
+Klasik chat'in tersine: kullanıcı mesajını **LLM'e göndermiyoruz**. Mesajı bir literatür arama sorgusu olarak işleyip akademik API'leri paralel sorguluyor, hepsini DOI ile dedupe edip RAG koleksiyonuna otomatik enjekte ediyoruz.
+
+```
+[mode=deep_search] /v1/chat
+  AI Engine: regex ile (count, year_from) çıkar (örn. "30 makale", "2023 sonrası")
+  ┌──────────────────┐  ┌──────────────────┐  ┌──────────┐
+  │ OpenAlex         │  │ Semantic Scholar │  │ arXiv    │
+  └────────┬─────────┘  └────────┬─────────┘  └────┬─────┘
+           └──────────────┬──────┴────────────────┘
+                          ▼
+                  DOI dedup + merge
+                          ▼
+       SSE 'tool_result' (ui_kind=paper_list) → frontend kart render
+                          ▼
+       Her sonuç için asyncio.create_task(ingest_paper_to_documents)
+         → Unpaywall PDF resolve → Documents /upload (source_session_id, doi, title)
+         → Documents normal pipeline (Tika → MinIO → doc.uploaded.v1)
+         → Processing chunk + embed → READY
+```
+
+**Neden LLM bypass**: Model gereksiz latency + token maliyeti ekliyordu; üstelik bazen kullanıcı `30 makale` derken sorguyu yeniden yazıp 10 ile geri dönüyordu. Aramayı doğrudan yapmak hem hızlı hem deterministik.
+
+**Persisted shape**: `_deep_search_stream` assistant satırını üç blokla yazıyor — `tool_use` + `tool_result` + `text`. Böylece kullanıcı session'ı tekrar açtığında paper kartları DB'den canlanıyor (sessions endpoint bu blokları `toolResults` array'ine düzleştiriyor).
+
+**Source lineage**: Her ingest edilen dokümanın satırında `source_session_id` + `source_paper_doi` + `source_paper_title` var. Documents listesi `?source_session_id=…` ile filtrelenebiliyor — "bu sohbete eklenen kaynaklar".
+
+Detay:
+- AI Engine route: [services/aiengine/src/aiengine/api/routes/chat.py](./services/aiengine/src/aiengine/api/routes/chat.py) (`_deep_search_stream`)
+- Aggregator: [services/aiengine/src/aiengine/research/](./services/aiengine/src/aiengine/research/)
+
+## Admin observability dashboard
+
+Tenant-üstü operatör görüşü. Yeni backend kodu yok; her metrik var olan şemalardan geliyor.
+
+```
+KAI Postgres (datasource, BYPASSRLS via platform_admin)
+  ├── identity_schema.users                  → toplam kullanıcı
+  ├── aiengine_schema.sessions               → aktif oturum, model split (donut)
+  ├── aiengine_schema.messages.token_usage   → JSONB { input, output, cache_read, cache_write }
+  │     ↳ günlük input vs output (stacked bar)
+  │     ↳ per-user leaderboard (gauge cell)
+  │     ↳ per-model donut (sessions.model JOIN)
+  └── documents_schema.documents             → toplam doküman
+```
+
+**Provisioning**: `infra/grafana/provisioning/datasources/datasources.yml`'a yeni datasource (`uid: kai-postgres`), `infra/grafana/dashboards/token-usage.json` provisioning ile yükleniyor. Conteyner restart yetiyor; UI tarafında manuel ekleme yok.
+
+**Yol üstü fix**: `platform_admin` rolü `GRANT ALL ON ALL TABLES` aldığında bile schema'ya `USAGE` izni olmadan "permission denied for schema" hatası veriyordu. `04-roles.sql`'a `GRANT USAGE ON SCHEMA … TO platform_admin` + `ALTER DEFAULT PRIVILEGES` eklendi — ileride eklenecek tablolar otomatik miras alıyor.
+
+Erişim: <http://localhost:3001/d/kai-token-usage> (admin / admin).
+
+Detay:
+- Dashboard JSON: [infra/grafana/dashboards/token-usage.json](./infra/grafana/dashboards/token-usage.json)
+- Datasource: [infra/grafana/provisioning/datasources/datasources.yml](./infra/grafana/provisioning/datasources/datasources.yml)
