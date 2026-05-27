@@ -41,14 +41,13 @@ services:
     environment:
       NODE_ENV: development
 
-  frontend:
-    volumes:
-      - ./frontend:/app
-      - frontend_next_cache:/app/.next
-      - frontend_node_modules:/app/node_modules
+  # frontend has no dev mount — Phase H replaced the nginx static
+  # placeholder with a real Next.js standalone build. Bind-mounting
+  # ./frontend over /app hides the built server.js (same gotcha that
+  # bit processing earlier). Use `npm run dev` directly on the host
+  # for live-reload during frontend work; the container always runs
+  # the production build.
 
 volumes:
   documents_maven_cache:
   realtime_node_modules:
-  frontend_next_cache:
-  frontend_node_modules:
