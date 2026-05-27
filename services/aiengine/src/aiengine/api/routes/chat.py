@@ -33,7 +33,12 @@ class ChatRequest(BaseModel):
         default=None,
         description="Resume an existing session, or omit to start a new one.",
     )
-    message: str = Field(..., min_length=1, max_length=32_000)
+    # 200K covers user prompt + a few large `<attached>` blocks from the
+    # frontend paste-as-chip path. Modern LLMs (Nemotron, Claude, GPT-4)
+    # all support 100K+ context; we cap below the model limit so request
+    # validation rejects truly absurd payloads (whole books, etc.) before
+    # the LLM does it for us.
+    message: str = Field(..., min_length=1, max_length=200_000)
     model: str | None = Field(
         default=None,
         description="Override default model. Aliases like 'opus', 'sonnet', 'haiku'.",
